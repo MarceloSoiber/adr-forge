@@ -39,6 +39,8 @@ primary output path.
 
 ## Phase 2: Foundational Components
 
+**Tracking**: GitHub issue [#3](https://github.com/MarceloSoiber/adr-forge/issues/3)
+
 **Purpose**: Implement shared contracts, persistence, artifacts, resource safety, and delivery shells that block every story.
 
 **Critical**: No user story implementation starts before this phase passes CPU-only tests.
