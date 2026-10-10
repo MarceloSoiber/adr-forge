@@ -1,0 +1,634 @@
+openapi: 3.1.0
+info:
+  title: ADR Forge Local API
+  version: 0.1.0
+  description: Localhost-only API for architecture scenario analysis and experiment review.
+servers:
+  - url: http://127.0.0.1:8000/api/v1
+paths:
+  /health:
+    get:
+      operationId: getHealth
+      responses:
+        "200":
+          description: Process is alive.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+  /readiness:
+    get:
+      operationId: getReadiness
+      responses:
+        "200":
+          description: Required local storage and configuration are ready.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReadinessResponse"
+        "503":
+          $ref: "#/components/responses/ProblemResponse"
+  /system/resources:
+    get:
+      operationId: getSystemResources
+      responses:
+        "200":
+          description: Sanitized disk, memory, and GPU capacity snapshot.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SystemResources"
+  /integrations/knowledge-hub:
+    get:
+      operationId: getKnowledgeHubStatus
+      responses:
+        "200":
+          description: Sanitized integration availability without credentials.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IntegrationStatus"
+  /strategies:
+    get:
+      operationId: listStrategies
+      responses:
+        "200":
+          description: Configured analysis strategies and current availability.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/StrategySummary"
+  /scenarios:
+    post:
+      operationId: createScenario
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateScenarioRequest"
+      responses:
+        "201":
+          description: Scenario and first immutable revision created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScenarioResponse"
+        "422":
+          $ref: "#/components/responses/ProblemResponse"
+  /scenarios/{scenarioId}:
+    get:
+      operationId: getScenario
+      parameters:
+        - $ref: "#/components/parameters/ScenarioId"
+      responses:
+        "200":
+          description: Scenario and current revision.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScenarioResponse"
+        "404":
+          $ref: "#/components/responses/ProblemResponse"
+  /scenarios/{scenarioId}/revisions:
+    post:
+      operationId: createScenarioRevision
+      parameters:
+        - $ref: "#/components/parameters/ScenarioId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateRevisionRequest"
+      responses:
+        "201":
+          description: New immutable revision created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScenarioRevision"
+        "404":
+          $ref: "#/components/responses/ProblemResponse"
+        "409":
+          $ref: "#/components/responses/ProblemResponse"
+        "422":
+          $ref: "#/components/responses/ProblemResponse"
+  /analysis-runs:
+    post:
+      operationId: createAnalysisRun
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateAnalysisRunRequest"
+      responses:
+        "202":
+          description: Run accepted and queued for the exclusive local executor.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AnalysisRun"
+        "409":
+          $ref: "#/components/responses/ProblemResponse"
+        "422":
+          $ref: "#/components/responses/ProblemResponse"
+  /analysis-runs/{runId}:
+    get:
+      operationId: getAnalysisRun
+      parameters:
+        - $ref: "#/components/parameters/RunId"
+      responses:
+        "200":
+          description: Current persisted run snapshot.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AnalysisRun"
+        "404":
+          $ref: "#/components/responses/ProblemResponse"
+  /analysis-runs/{runId}/events:
+    get:
+      operationId: streamAnalysisRunEvents
+      parameters:
+        - $ref: "#/components/parameters/RunId"
+      responses:
+        "200":
+          description: Best-effort server-sent progress events; clients first read persisted state.
+          content:
+            text/event-stream:
+              schema:
+                type: string
+                examples:
+                  - "event: progress\ndata: {\"run_id\":\"...\",\"stage\":\"generating\"}\n\n"
+        "404":
+          $ref: "#/components/responses/ProblemResponse"
+  /analysis-runs/{runId}/cancel:
+    post:
+      operationId: cancelAnalysisRun
+      parameters:
+        - $ref: "#/components/parameters/RunId"
+      responses:
+        "202":
+          description: Cooperative cancellation requested.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AnalysisRun"
+        "409":
+          $ref: "#/components/responses/ProblemResponse"
+  /analysis-runs/{runId}/adr:
+    get:
+      operationId: getRunAdr
+      parameters:
+        - $ref: "#/components/parameters/RunId"
+      responses:
+        "200":
+          description: Validated structured ADR.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdrDraft"
+        "404":
+          $ref: "#/components/responses/ProblemResponse"
+        "409":
+          $ref: "#/components/responses/ProblemResponse"
+  /analysis-runs/{runId}/export:
+    get:
+      operationId: exportRunAdr
+      parameters:
+        - $ref: "#/components/parameters/RunId"
+        - name: format
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [markdown, json]
+            default: markdown
+      responses:
+        "200":
+          description: ADR export.
+          content:
+            text/markdown:
+              schema:
+                type: string
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdrDraft"
+        "409":
+          $ref: "#/components/responses/ProblemResponse"
+  /experiments:
+    post:
+      operationId: createExperiment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateExperimentRequest"
+      responses:
+        "201":
+          description: Immutable experiment inputs registered.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Experiment"
+        "422":
+          $ref: "#/components/responses/ProblemResponse"
+  /experiments/{experimentId}:
+    get:
+      operationId: getExperiment
+      parameters:
+        - $ref: "#/components/parameters/ExperimentId"
+      responses:
+        "200":
+          description: Experiment state and accounting.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Experiment"
+        "404":
+          $ref: "#/components/responses/ProblemResponse"
+  /experiments/{experimentId}/runs:
+    get:
+      operationId: listExperimentRuns
+      parameters:
+        - $ref: "#/components/parameters/ExperimentId"
+      responses:
+        "200":
+          description: Every expected run and terminal or missing status.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AnalysisRun"
+  /experiments/{experimentId}/report:
+    get:
+      operationId: getExperimentReport
+      parameters:
+        - $ref: "#/components/parameters/ExperimentId"
+      responses:
+        "200":
+          description: Consolidated reproducibility and result report.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        "409":
+          $ref: "#/components/responses/ProblemResponse"
+  /comparisons:
+    post:
+      operationId: createBlindComparison
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateComparisonRequest"
+      responses:
+        "201":
+          description: Blinded outputs with randomized labels.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BlindComparison"
+        "422":
+          $ref: "#/components/responses/ProblemResponse"
+  /comparisons/{comparisonId}:
+    get:
+      operationId: getBlindComparison
+      parameters:
+        - $ref: "#/components/parameters/ComparisonId"
+      responses:
+        "200":
+          description: Blinded comparison; identities omitted before evaluation.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BlindComparison"
+  /comparisons/{comparisonId}/evaluation:
+    post:
+      operationId: submitBlindEvaluation
+      parameters:
+        - $ref: "#/components/parameters/ComparisonId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SubmitEvaluationRequest"
+      responses:
+        "201":
+          description: Immutable evaluation recorded.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EvaluationResult"
+        "409":
+          $ref: "#/components/responses/ProblemResponse"
+        "422":
+          $ref: "#/components/responses/ProblemResponse"
+  /comparisons/{comparisonId}/reveal:
+    get:
+      operationId: revealComparisonIdentities
+      parameters:
+        - $ref: "#/components/parameters/ComparisonId"
+      responses:
+        "200":
+          description: Label-to-run mapping after evaluation submission.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties:
+                  type: string
+                  format: uuid
+        "409":
+          $ref: "#/components/responses/ProblemResponse"
+components:
+  parameters:
+    ScenarioId:
+      name: scenarioId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    RunId:
+      name: runId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    ExperimentId:
+      name: experimentId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    ComparisonId:
+      name: comparisonId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+  responses:
+    ProblemResponse:
+      description: Problem details.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+  schemas:
+    Problem:
+      type: object
+      required: [type, title, status]
+      properties:
+        type: { type: string }
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+        code: { type: string }
+        request_id: { type: string }
+    HealthResponse:
+      type: object
+      required: [status]
+      properties:
+        status: { type: string, const: ok }
+    ReadinessResponse:
+      type: object
+      required: [ready, checks]
+      properties:
+        ready: { type: boolean }
+        checks:
+          type: object
+          additionalProperties: { type: boolean }
+    SystemResources:
+      type: object
+      required: [disk, memory, gpu, artifact_budget]
+      properties:
+        disk: { type: object, additionalProperties: true }
+        memory: { type: object, additionalProperties: true }
+        gpu: { type: object, additionalProperties: true }
+        artifact_budget: { type: object, additionalProperties: true }
+        blockers:
+          type: array
+          items: { type: string }
+    IntegrationStatus:
+      type: object
+      required: [name, available]
+      properties:
+        name: { type: string }
+        available: { type: boolean }
+        reason: { type: [string, "null"] }
+        latency_ms: { type: [integer, "null"], minimum: 0 }
+    StrategySummary:
+      type: object
+      required: [id, version, kind, model_id, requires_retrieval, available]
+      properties:
+        id: { type: string }
+        version: { type: string }
+        kind:
+          type: string
+          enum: [base, prompted, rag, fine_tuned, fine_tuned_rag]
+        model_id: { type: string }
+        model_revision: { type: string }
+        requires_retrieval: { type: boolean }
+        available: { type: boolean }
+        unavailable_reason: { type: [string, "null"] }
+    CreateScenarioRequest:
+      type: object
+      required: [title, language, problem]
+      properties:
+        title: { type: string, minLength: 3, maxLength: 200 }
+        language: { type: string, const: pt-BR }
+        problem: { type: string, minLength: 20, maxLength: 20000 }
+        facts:
+          type: array
+          items: { type: string, minLength: 1, maxLength: 2000 }
+        constraints:
+          type: array
+          items: { type: string, minLength: 1, maxLength: 2000 }
+        desired_qualities:
+          type: array
+          items: { type: string, minLength: 1, maxLength: 500 }
+        candidate_alternatives:
+          type: array
+          items: { type: string, minLength: 1, maxLength: 500 }
+    CreateRevisionRequest:
+      type: object
+      required: [base_revision_number, clarification_answers]
+      properties:
+        base_revision_number: { type: integer, minimum: 1 }
+        clarification_answers:
+          type: array
+          minItems: 1
+          maxItems: 3
+          items:
+            type: object
+            required: [question, answer, source_run_id]
+            properties:
+              question: { type: string, minLength: 1, maxLength: 2000 }
+              answer: { type: string, minLength: 1, maxLength: 5000 }
+              source_run_id: { type: string, format: uuid }
+    ScenarioRevision:
+      type: object
+      required: [id, scenario_id, revision_number, problem, content_hash, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        scenario_id: { type: string, format: uuid }
+        revision_number: { type: integer, minimum: 1 }
+        problem: { type: string }
+        facts: { type: array, items: { type: string } }
+        constraints: { type: array, items: { type: string } }
+        desired_qualities: { type: array, items: { type: string } }
+        candidate_alternatives: { type: array, items: { type: string } }
+        categories: { type: array, items: { type: string } }
+        content_hash: { type: string, pattern: "^[a-f0-9]{64}$" }
+        created_at: { type: string, format: date-time }
+    ScenarioResponse:
+      type: object
+      required: [id, title, language, current_revision]
+      properties:
+        id: { type: string, format: uuid }
+        title: { type: string }
+        language: { type: string }
+        current_revision: { $ref: "#/components/schemas/ScenarioRevision" }
+    CreateAnalysisRunRequest:
+      type: object
+      required: [scenario_revision_id, strategy_id, strategy_version]
+      properties:
+        scenario_revision_id: { type: string, format: uuid }
+        strategy_id: { type: string }
+        strategy_version: { type: string }
+        retrieval_snapshot_id: { type: [string, "null"], format: uuid }
+        experiment_id: { type: [string, "null"], format: uuid }
+    AnalysisRun:
+      type: object
+      required: [id, scenario_revision_id, strategy_id, strategy_version, status, stage, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        scenario_revision_id: { type: string, format: uuid }
+        strategy_id: { type: string }
+        strategy_version: { type: string }
+        status:
+          type: string
+          enum: [pending, waiting_resources, running, completed, needs_clarification, invalid_output, failed, cancelled, interrupted]
+        stage: { type: string }
+        progress_percent: { type: [integer, "null"], minimum: 0, maximum: 100 }
+        adr_draft_id: { type: [string, "null"], format: uuid }
+        failure_code: { type: [string, "null"] }
+        failure_detail: { type: [string, "null"], maxLength: 2000 }
+        created_at: { type: string, format: date-time }
+        started_at: { type: [string, "null"], format: date-time }
+        finished_at: { type: [string, "null"], format: date-time }
+    AdrDraft:
+      type: object
+      required: [id, analysis_run_id, schema_version, title, status, context, assumptions, unresolved_questions, alternatives, positive_consequences, negative_consequences, risks, review_triggers, confidence]
+      properties:
+        id: { type: string, format: uuid }
+        analysis_run_id: { type: string, format: uuid }
+        schema_version: { type: string }
+        title: { type: string, minLength: 3, maxLength: 200 }
+        status: { type: string, enum: [provisional, proposed, accepted, rejected, superseded] }
+        context: { type: array, minItems: 1, items: { type: string } }
+        facts: { type: array, items: { type: string } }
+        assumptions: { type: array, items: { type: object, additionalProperties: true } }
+        unresolved_questions: { type: array, maxItems: 3, items: { type: object, additionalProperties: true } }
+        constraints: { type: array, items: { type: string } }
+        alternatives: { type: array, items: { type: object, additionalProperties: true } }
+        decision: { type: [string, "null"] }
+        rationale: { type: array, items: { type: object, additionalProperties: true } }
+        positive_consequences: { type: array, items: { type: string } }
+        negative_consequences: { type: array, items: { type: string } }
+        risks: { type: array, items: { type: object, additionalProperties: true } }
+        review_triggers: { type: array, items: { type: object, additionalProperties: true } }
+        confidence: { type: number, minimum: 0, maximum: 1 }
+        reference_ids: { type: array, items: { type: string } }
+    CreateExperimentRequest:
+      type: object
+      required: [name, scenario_revision_ids, strategy_refs, rubric_version_id, code_revision]
+      properties:
+        name: { type: string, minLength: 3, maxLength: 200 }
+        scenario_revision_ids:
+          type: array
+          minItems: 1
+          items: { type: string, format: uuid }
+        strategy_refs:
+          type: array
+          minItems: 2
+          items:
+            type: object
+            required: [id, version]
+            properties:
+              id: { type: string }
+              version: { type: string }
+        dataset_version_id: { type: [string, "null"], format: uuid }
+        rubric_version_id: { type: string, format: uuid }
+        code_revision: { type: string, minLength: 7 }
+    Experiment:
+      type: object
+      required: [id, name, status, rubric_version_id, code_revision, expected_run_count, completed_run_count]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        status: { type: string, enum: [draft, running, completed, partial, failed, cancelled] }
+        rubric_version_id: { type: string, format: uuid }
+        code_revision: { type: string }
+        expected_run_count: { type: integer, minimum: 1 }
+        completed_run_count: { type: integer, minimum: 0 }
+        failed_run_count: { type: integer, minimum: 0 }
+        excluded_run_count: { type: integer, minimum: 0 }
+    CreateComparisonRequest:
+      type: object
+      required: [run_ids, rubric_version_id]
+      properties:
+        run_ids:
+          type: array
+          minItems: 2
+          uniqueItems: true
+          items: { type: string, format: uuid }
+        rubric_version_id: { type: string, format: uuid }
+    BlindComparison:
+      type: object
+      required: [id, labels, rubric_version_id, evaluated]
+      properties:
+        id: { type: string, format: uuid }
+        labels:
+          type: object
+          description: Anonymous label to ADR content; no run identity before evaluation.
+          additionalProperties: { $ref: "#/components/schemas/AdrDraft" }
+        rubric_version_id: { type: string, format: uuid }
+        evaluated: { type: boolean }
+    SubmitEvaluationRequest:
+      type: object
+      required: [evaluator_id, scores, preference]
+      properties:
+        evaluator_id: { type: string, minLength: 1, maxLength: 200 }
+        scores:
+          type: object
+          additionalProperties:
+            type: object
+            additionalProperties: { type: integer, minimum: 0, maximum: 4 }
+        preference: { type: string, description: Anonymous label or `tie` }
+        notes: { type: string, maxLength: 5000 }
+    EvaluationResult:
+      type: object
+      required: [id, comparison_id, rubric_version_id, evaluator_id, scores, preference, submitted_at]
+      properties:
+        id: { type: string, format: uuid }
+        comparison_id: { type: string, format: uuid }
+        rubric_version_id: { type: string, format: uuid }
+        evaluator_id: { type: string }
+        scores: { type: object, additionalProperties: true }
+        preference: { type: string }
+        notes: { type: [string, "null"] }
+        submitted_at: { type: string, format: date-time }
