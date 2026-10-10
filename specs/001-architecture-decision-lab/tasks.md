@@ -18,6 +18,8 @@ primary output path.
 
 ## Phase 1: Setup
 
+**Tracking**: GitHub issue [#1](https://github.com/MarceloSoiber/adr-forge/issues/1)
+
 **Purpose**: Establish the reproducible Python, TypeScript, test, and CPU-build toolchains.
 
 - [ ] T001 Create the planned package, app, dataset, config, test, and local-runtime directory structure with package markers under `src/adr_forge/`, `apps/api/`, `apps/web/`, `datasets/`, `configs/`, `tests/`, and `var/.gitkeep`
