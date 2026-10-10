@@ -18,18 +18,20 @@ primary output path.
 
 ## Phase 1: Setup
 
+**Tracking**: GitHub issue [#1](https://github.com/MarceloSoiber/adr-forge/issues/1)
+
 **Purpose**: Establish the reproducible Python, TypeScript, test, and CPU-build toolchains.
 
-- [ ] T001 Create the planned package, app, dataset, config, test, and local-runtime directory structure with package markers under `src/adr_forge/`, `apps/api/`, `apps/web/`, `datasets/`, `configs/`, `tests/`, and `var/.gitkeep`
-- [ ] T002 Configure Python 3.12, runtime dependencies, `dev` and `ml` optional groups, and the `adr-forge` CLI entry point in `pyproject.toml`
-- [ ] T003 [P] Generate the React + TypeScript + Vite application and scripts in `apps/web/package.json`, `apps/web/tsconfig.json`, and `apps/web/vite.config.ts`
-- [ ] T004 [P] Add Python caches, Node artifacts, `.env`, SQLite files, Hugging Face caches, models, adapters, checkpoints, private snapshots, and `var/` outputs to `.gitignore`
-- [ ] T005 [P] Document loopback, SQLite, artifact quota, Knowledge Hub, Hugging Face, and model settings without real secrets in `.env.example`
-- [ ] T006 [P] Configure Ruff, mypy, Pytest markers (`gpu`, `live_integration`), coverage, and asyncio behavior in `pyproject.toml`
-- [ ] T007 [P] Configure ESLint, Prettier, Vitest, Testing Library, and Playwright in `apps/web/eslint.config.js`, `apps/web/vitest.config.ts`, and `apps/web/playwright.config.ts`
-- [ ] T008 Add CPU-only quality jobs for Python, frontend, dataset fixtures, secret scanning, and dependency auditing in `.github/workflows/ci.yml`
-- [ ] T009 [P] Add CPU-safe multi-stage API and static web builds plus loopback defaults in `Dockerfile`, `apps/web/Dockerfile`, and `compose.yaml`
-- [ ] T010 Update local setup, architecture links, Spec Kit workflow, and no-production warning in `README.md`
+- [X] T001 Create the planned package, app, dataset, config, test, and local-runtime directory structure with package markers under `src/adr_forge/`, `apps/api/`, `apps/web/`, `datasets/`, `configs/`, `tests/`, and `var/.gitkeep`
+- [X] T002 Configure Python 3.12, runtime dependencies, `dev` and `ml` optional groups, and the `adr-forge` CLI entry point in `pyproject.toml`
+- [X] T003 [P] Generate the React + TypeScript + Vite application and scripts in `apps/web/package.json`, `apps/web/tsconfig.json`, and `apps/web/vite.config.ts`
+- [X] T004 [P] Add Python caches, Node artifacts, `.env`, SQLite files, Hugging Face caches, models, adapters, checkpoints, private snapshots, and `var/` outputs to `.gitignore`
+- [X] T005 [P] Document loopback, SQLite, artifact quota, Knowledge Hub, Hugging Face, and model settings without real secrets in `.env.example`
+- [X] T006 [P] Configure Ruff, mypy, Pytest markers (`gpu`, `live_integration`), coverage, and asyncio behavior in `pyproject.toml`
+- [X] T007 [P] Configure ESLint, Prettier, Vitest, Testing Library, and Playwright in `apps/web/eslint.config.js`, `apps/web/vitest.config.ts`, and `apps/web/playwright.config.ts`
+- [X] T008 Add CPU-only quality jobs for Python, frontend, dataset fixtures, secret scanning, and dependency auditing in `.github/workflows/ci.yml`
+- [X] T009 [P] Add CPU-safe multi-stage API and static web builds plus loopback defaults in `Dockerfile`, `apps/web/Dockerfile`, and `compose.yaml`
+- [X] T010 Update local setup, architecture links, Spec Kit workflow, and no-production warning in `README.md`
 
 **Checkpoint**: Empty application skeleton installs, lints, tests, and builds without downloading a model.
 

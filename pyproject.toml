@@ -1,0 +1,89 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "adr-forge"
+version = "0.1.0"
+description = "Local-first laboratory for reproducible architecture decision analysis"
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+license = { text = "MIT" }
+authors = [{ name = "ADR Forge contributors" }]
+dependencies = [
+  "alembic>=1.14,<2",
+  "aiosqlite>=0.20,<1",
+  "fastapi>=0.115,<1",
+  "httpx>=0.28,<1",
+  "pydantic>=2.10,<3",
+  "pydantic-settings>=2.7,<3",
+  "sqlalchemy[asyncio]>=2.0,<3",
+  "typer>=0.15,<1",
+  "uvicorn[standard]>=0.34,<1",
+]
+
+[project.optional-dependencies]
+dev = [
+  "hypothesis>=6.125,<7",
+  "mypy>=1.14,<2",
+  "pip-audit>=2.7,<3",
+  "pytest>=8.3,<9",
+  "pytest-asyncio>=0.25,<1",
+  "pytest-cov>=6,<7",
+  "respx>=0.22,<1",
+  "ruff>=0.9,<1",
+]
+ml = [
+  "accelerate>=1.2,<2",
+  "bitsandbytes>=0.45,<1",
+  "datasets>=3.2,<4",
+  "peft>=0.14,<1",
+  "torch>=2.5,<3",
+  "transformers>=4.48,<5",
+  "trl>=0.13,<1",
+]
+
+[project.scripts]
+adr-forge = "adr_forge.cli.main:app"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/adr_forge"]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+src = ["src", "apps", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "ASYNC", "S", "RUF"]
+ignore = ["S101"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = ["S101"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+warn_unreachable = true
+plugins = ["pydantic.mypy"]
+mypy_path = "src"
+
+[tool.pytest.ini_options]
+addopts = "--strict-config --strict-markers --cov=adr_forge --cov-report=term-missing"
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+testpaths = ["tests"]
+markers = [
+  "gpu: requires a local NVIDIA GPU and pinned model artifacts",
+  "live_integration: calls an explicitly configured external integration",
+]
+
+[tool.coverage.run]
+branch = true
+source = ["adr_forge"]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true
+fail_under = 0
+

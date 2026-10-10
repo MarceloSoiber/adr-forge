@@ -1,0 +1,63 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
+.venv/
+venv/
+dist/
+build/
+
+# JavaScript / TypeScript
+node_modules/
+apps/web/dist/
+apps/web/coverage/
+playwright-report/
+test-results/
+*.tsbuildinfo
+*.log
+
+# Local configuration and secrets
+.env
+.env.*
+!.env.example
+
+# Local databases and runtime state
+*.db
+*.sqlite
+*.sqlite3
+*.sqlite-*
+var/*
+!var/.gitkeep
+
+# Models, adapters, checkpoints, and caches
+models/
+adapters/
+checkpoints/
+.cache/
+.huggingface/
+**/huggingface/
+**/hub/
+*.safetensors
+*.ckpt
+*.pt
+*.pth
+
+# Private experiment material
+datasets/private/
+snapshots/private/
+artifacts/
+
+# Editors and operating systems
+.DS_Store
+Thumbs.db
+*.tmp
+*.swp
+.idea/
+.vscode/
+

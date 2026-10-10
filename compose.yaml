@@ -1,0 +1,32 @@
+name: adr-forge
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    # The process listens on the isolated container network; the published host
+    # socket below remains loopback-only.
+    command: ["uvicorn", "apps.api.main:app", "--host", "0.0.0.0", "--port", "8000"]
+    environment:
+      ADR_FORGE_DATABASE_URL: sqlite+aiosqlite:////app/var/adr-forge.db
+      ADR_FORGE_ARTIFACT_ROOT: /app/var/artifacts
+      CUDA_VISIBLE_DEVICES: ""
+    ports:
+      - "127.0.0.1:8000:8000"
+    volumes:
+      - adr-forge-var:/app/var
+    restart: unless-stopped
+
+  web:
+    build:
+      context: apps/web
+      dockerfile: Dockerfile
+    depends_on:
+      - api
+    ports:
+      - "127.0.0.1:5173:80"
+    restart: unless-stopped
+
+volumes:
+  adr-forge-var:

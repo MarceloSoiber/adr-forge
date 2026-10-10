@@ -1,0 +1,148 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  UV_NO_PROGRESS: "1"
+  PYTHONUNBUFFERED: "1"
+
+jobs:
+  python-quality:
+    name: Python quality (CPU only)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install development dependencies
+        run: uv sync --frozen --extra dev
+      - name: Check formatting
+        run: uv run ruff format --check .
+      - name: Lint
+        run: uv run ruff check .
+      - name: Type check
+        run: uv run mypy src apps/api
+      - name: Run CPU-safe tests
+        shell: bash
+        run: |
+          set +e
+          uv run pytest -m "not gpu and not live_integration"
+          status=$?
+          set -e
+          if [ "$status" -ne 0 ] && [ "$status" -ne 5 ]; then
+            exit "$status"
+          fi
+        env:
+          CUDA_VISIBLE_DEVICES: ""
+          ADR_FORGE_HOST: 127.0.0.1
+
+  frontend-quality:
+    name: Frontend quality
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: apps/web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run format:check
+      - run: npm test -- --run
+      - run: npm run build
+
+  dataset-fixtures:
+    name: Dataset fixture integrity
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Parse tracked JSON and JSONL fixtures
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          roots = (Path("datasets/fixtures"), Path("datasets/public"), Path("datasets/manifests"))
+          files = sorted(
+              path
+              for root in roots
+              if root.exists()
+              for path in root.rglob("*")
+              if path.suffix in {".json", ".jsonl"}
+          )
+          if not files:
+              print("No dataset JSON or JSONL fixtures exist yet")
+          for path in files:
+              if path.suffix == ".json":
+                  json.loads(path.read_text(encoding="utf-8"))
+                  continue
+              for line_number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+                  if line.strip():
+                      try:
+                          json.loads(line)
+                      except json.JSONDecodeError as error:
+                          raise SystemExit(f"{path}:{line_number}: {error}") from error
+          print(f"Validated {len(files)} dataset fixture files")
+          PY
+
+  secret-scan:
+    name: Secret scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  dependency-audit:
+    name: Dependency audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+      - name: Audit Python dependencies
+        run: |
+          uv export --frozen --no-dev --no-emit-project --output-file /tmp/requirements.txt
+          uvx pip-audit --requirement /tmp/requirements.txt
+      - name: Audit frontend dependencies
+        working-directory: apps/web
+        run: npm audit --audit-level=high
