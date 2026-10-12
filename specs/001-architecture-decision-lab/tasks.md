@@ -69,6 +69,8 @@ primary output path.
 
 ## Phase 3: User Story 1 — Analyze an architecture decision (P1) MVP
 
+**Tracking**: GitHub issue [#5](https://github.com/MarceloSoiber/adr-forge/issues/5)
+
 **Goal**: Submit a complete scenario, run one baseline strategy with progress, validate a structured ADR, and export Markdown.
 
 **Independent Test**: With a fake model runtime, create a scenario, start a run, observe terminal progress, retrieve a valid ADR, and export it without Knowledge Hub or GPU.
