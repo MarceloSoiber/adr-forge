@@ -249,6 +249,20 @@ group may cross from train/validation into fixed evaluation without explicit dat
 Unique key: `sha256`, `kind`. Physical deletion is allowed only when no retained entity references
 the artifact and an explicit prune operation is confirmed.
 
+## ArtifactReference
+
+| Field | Type | Constraints |
+| --- | --- | --- |
+| `artifact_id` | UUID | Foreign key to `Artifact`; part of primary key |
+| `owner_type` | string | Stable, registered owner kind; part of primary key |
+| `owner_id` | UUID | Owning entity identity; part of primary key |
+| `created_at` | timestamp | Required, timezone-aware UTC |
+
+Artifact-owning services create or remove references in the same unit of work as their owning
+metadata. The artifact service treats unknown owner types as invalid and refuses physical deletion
+while any reference exists. The registry allows the foundational artifact service to enforce safe
+deletion before later owner tables are introduced.
+
 ## Indexes
 
 - Scenario revision unique index on `(scenario_id, revision_number)`.
@@ -256,6 +270,7 @@ the artifact and an explicit prune operation is confirmed.
 - Experiment index on `(status, created_at)`.
 - Dataset membership indexes on `(dataset_version_id, split)` and `lineage_group_id`.
 - Artifact unique index on `(sha256, kind)` and index on retention.
+- Artifact-reference index on `(artifact_id, owner_type)`.
 - Evaluation indexes on comparison and rubric version.
 
 ## Retention and Recovery

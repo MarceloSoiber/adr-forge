@@ -45,23 +45,23 @@ primary output path.
 
 **Critical**: No user story implementation starts before this phase passes CPU-only tests.
 
-- [ ] T011 [P] Implement UUID generation, timezone-aware clock, canonical JSON, and SHA-256 helpers in `src/adr_forge/shared/identity.py`, `src/adr_forge/shared/time.py`, and `src/adr_forge/shared/hashing.py`
-- [ ] T012 [P] Implement environment configuration with loopback-only host validation, 50 GB artifact limit, 40 GB warning, secret fields, and typed paths in `src/adr_forge/shared/config.py`
-- [ ] T013 Implement async SQLite engine, WAL configuration, session factory, and unit-of-work boundaries in `src/adr_forge/persistence/database.py` and `src/adr_forge/persistence/unit_of_work.py`
-- [ ] T014 Initialize Alembic and create the schema-version table in `alembic.ini`, `alembic/env.py`, and `alembic/versions/0001_schema_version.py`
-- [ ] T015 [P] Implement RFC 9457-style problem details, stable error codes, and exception mapping in `src/adr_forge/shared/errors.py` and `src/adr_forge/api/problem_details.py`
-- [ ] T016 [P] Implement structured logging with request/run correlation and redaction of tokens, prompts, and retrieved content in `src/adr_forge/shared/logging.py`
-- [ ] T017 Create the Artifact persistence model and migration with `relative_path` constrained under the artifact root, `sha256` exactly 64 lowercase hex characters, `size_bytes` non-negative, and retention in `keep|prunable|temporary` in `src/adr_forge/artifacts/models.py` and `alembic/versions/0002_artifacts.py`
-- [ ] T018 Implement atomic temporary-write, SHA-256 move, normalized path, reference-safe delete, and lookup behavior in `src/adr_forge/artifacts/store.py`
-- [ ] T019 [P] Add property tests for path traversal, hash stability, atomic failure cleanup, and referenced deletion refusal in `tests/unit/artifacts/test_store.py`
-- [ ] T020 Implement artifact quota accounting, warning at 40 GB, hard limit at 50 GB, free-disk reserve, list, and prune use cases in `src/adr_forge/artifacts/service.py`
-- [ ] T021 [P] Implement sanitized RAM, disk, NVIDIA GPU, VRAM, and active-process probes without terminating processes in `src/adr_forge/system/resources.py`
-- [ ] T022 Implement the exclusive cross-process GPU lease and preflight result contract in `src/adr_forge/system/gpu_lease.py`
-- [ ] T023 [P] Add CPU-fixture tests for insufficient VRAM, external LM Studio blocker reporting, lease exclusion, and secret-free diagnostics in `tests/unit/system/test_gpu_preflight.py`
-- [ ] T024 Implement in-process progress publication, cancellation token, and current-state snapshot interfaces in `src/adr_forge/system/progress.py`
-- [ ] T025 [P] Define model runtime, retrieval provider, strategy, repository, and transaction protocols in `src/adr_forge/shared/ports.py`
-- [ ] T026 Implement application factory, loopback CORS, request IDs, lifespan reconciliation hook, `/health`, `/readiness`, `/system/resources`, and integration status routes in `apps/api/main.py` and `src/adr_forge/api/routes/system.py`
-- [ ] T027 Implement the Typer root command and read-only `adr-forge doctor` human/JSON outputs with documented exit codes in `src/adr_forge/cli/main.py` and `src/adr_forge/cli/doctor.py`
+- [X] T011 [P] Implement UUID generation, timezone-aware clock, canonical JSON, and SHA-256 helpers in `src/adr_forge/shared/identity.py`, `src/adr_forge/shared/time.py`, and `src/adr_forge/shared/hashing.py`
+- [X] T012 [P] Implement environment configuration with loopback-only host validation, 50 GB artifact limit, 40 GB warning, 5 GiB free-disk reserve, secret fields, and typed paths in `src/adr_forge/shared/config.py`
+- [X] T013 Implement async SQLite engine, WAL configuration, session factory, and unit-of-work boundaries in `src/adr_forge/persistence/database.py` and `src/adr_forge/persistence/unit_of_work.py`
+- [X] T014 Initialize Alembic and establish its `alembic_version` table as the sole schema-version authority in `alembic.ini`, `alembic/env.py`, and `alembic/versions/0001_schema_version.py`
+- [X] T015 [P] Implement RFC 9457-style problem details, stable error codes, and exception mapping in `src/adr_forge/shared/errors.py` and `src/adr_forge/api/problem_details.py`
+- [X] T016 [P] Implement structured logging with request/run correlation and redaction of tokens, prompts, and retrieved content in `src/adr_forge/shared/logging.py`
+- [X] T017 Create the Artifact and ArtifactReference persistence models and migration with registered owner types, `relative_path` constrained under the artifact root, `sha256` exactly 64 lowercase hex characters, `size_bytes` non-negative, and retention in `keep|prunable|temporary` in `src/adr_forge/artifacts/models.py` and `alembic/versions/0002_artifacts.py`
+- [X] T018 Implement atomic temporary-write, SHA-256 move, normalized path, reference-registry-safe delete, stale-temporary reconciliation, and lookup behavior in `src/adr_forge/artifacts/store.py`
+- [X] T019 [P] Add property tests for path traversal, hash stability, atomic failure cleanup, and referenced deletion refusal in `tests/unit/artifacts/test_store.py`
+- [X] T020 Implement artifact quota accounting, warning at 40 GB, hard limit at 50 GB, free-disk reserve, list, and prune use cases in `src/adr_forge/artifacts/service.py`
+- [X] T021 [P] Implement sanitized RAM, disk, NVIDIA GPU, VRAM, and active-process probes without terminating processes in `src/adr_forge/system/resources.py`
+- [X] T022 Implement the exclusive cross-process GPU lease and preflight result contract in `src/adr_forge/system/gpu_lease.py`
+- [X] T023 [P] Add CPU-fixture tests for insufficient VRAM, external LM Studio blocker reporting, lease exclusion, and secret-free diagnostics in `tests/unit/system/test_gpu_preflight.py`
+- [X] T024 Implement in-process progress publication, cancellation token, and current-state snapshot interfaces in `src/adr_forge/system/progress.py`
+- [X] T025 [P] Define model runtime, retrieval provider, strategy, repository, transaction, disk-capacity, artifact-reference, progress, and diagnostic protocols in `src/adr_forge/shared/ports.py`
+- [X] T026 Implement application factory, loopback CORS, request IDs, lifespan reconciliation hook, `/health`, `/readiness`, `/system/resources`, and integration status routes in `apps/api/main.py` and `src/adr_forge/api/routes/system.py`
+- [X] T027 Implement the Typer root command and read-only `adr-forge doctor` human/JSON outputs with documented exit codes in `src/adr_forge/cli/main.py` and `src/adr_forge/cli/doctor.py`
 
 **Checkpoint**: Foundation passes with temporary SQLite, temporary artifact roots, fake resource probes, and no live LLM.
 
