@@ -5,11 +5,13 @@ installation guarantee for the current documentation-only repository.
 
 ## Prerequisites
 
-- Linux workstation with NVIDIA driver and RTX 3060 12 GB.
 - `uv`, Python 3.12, Node.js, npm, and Git.
-- Knowledge Hub running locally for live RAG scenarios.
-- `Qwen/Qwen3-4B-Instruct-2507` access and sufficient local disk.
-- GPT-OSS unloaded from LM Studio before Qwen inference or training.
+- A local writable directory for temporary SQLite metadata and artifacts.
+
+The Phase 3 fake-runtime flow is CPU-safe and requires neither a GPU, model download, nor
+Knowledge Hub. Live Qwen validation additionally requires an NVIDIA driver, an RTX 3060-class GPU
+with 12 GB VRAM, access to the pinned `Qwen/Qwen3-4B-Instruct-2507` revision, sufficient local
+disk, and any conflicting LM Studio model unloaded.
 
 ## Configure
 
@@ -76,8 +78,32 @@ uv run uvicorn apps.api.main:app --host 127.0.0.1 --port 8000
 npm --prefix apps/web run dev -- --host 127.0.0.1
 ```
 
-Open the Vite loopback URL. Submit a fixture-backed scenario and verify that progress changes from
-pending through running to completed, then export the resulting ADR as Markdown.
+Open the Vite loopback URL. Select the fake baseline and submit a complete Portuguese scenario
+covering one of the four supported categories. Verify that progress changes from pending through
+running to completed, every ADR section is visible, the human-accountability notice is present,
+and the resulting ADR can be exported as Markdown.
+
+## Validate the Phase 3 vertical slice
+
+Run the focused CPU-safe suites with temporary database and artifact roots:
+
+```bash
+uv run alembic upgrade head
+uv run pytest \
+  tests/unit/scenarios \
+  tests/unit/decisions \
+  tests/contract/test_analysis_api.py \
+  tests/integration/test_analysis_vertical_slice.py \
+  -m "not gpu and not live_integration"
+npm --prefix apps/web test -- AnalysisFlow
+npm --prefix apps/web run build
+```
+
+Expected result: scenario classification and canonical hashes are deterministic; a fake analysis
+persists state before publishing progress; reconnect reads the current state before reopening SSE;
+the run reaches a valid terminal ADR or exposes stable validation findings; and Markdown rendering
+does not add facts absent from the structured ADR. All tests run without CUDA, network access, or
+model packages.
 
 ## Validate clarification behavior
 
@@ -109,7 +135,8 @@ uv run pytest -m gpu tests/integration/test_qwen_baseline.py
 ```
 
 Expected result: Qwen loads after preflight, only one GPU lease exists, raw output is preserved,
-structured validation runs, and peak VRAM is recorded.
+structured validation runs, and peak VRAM is recorded. This test is opt-in and is not part of the
+default Phase 3 completion gate.
 
 ## Validate dataset integrity
 
@@ -143,7 +170,8 @@ the strongest non-tuned baseline with the tuned strategy, and includes exact rep
 
 ## Recovery checks
 
-- Restarting the API converts abandoned `running` records to `interrupted`.
+- Restarting the API converts abandoned `pending`, `waiting_resources`, and `running` records to
+  `interrupted`.
 - Reconnecting the browser reads current run state before subscribing to new SSE progress.
 - `adr-forge database backup` creates a restorable SQLite backup with a verified manifest.
 - `adr-forge artifacts prune` refuses to delete referenced or retained artifacts.

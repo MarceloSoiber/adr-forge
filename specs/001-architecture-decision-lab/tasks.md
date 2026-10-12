@@ -77,7 +77,7 @@ primary output path.
 
 ### Tests first
 
-- [ ] T028 [P] [US1] Add unit tests for immutable scenario revision numbering, canonical hashes, category values, and stale revision rejection in `tests/unit/scenarios/test_scenario.py`
+- [ ] T028 [P] [US1] Add unit tests for immutable first-revision numbering, canonical hashes, per-scenario duplicate rejection, and one/multiple/unsupported category values in `tests/unit/scenarios/test_scenario.py`
 - [ ] T029 [P] [US1] Add unit and property tests for provisional versus conclusive ADR invariants, including maximum three questions, at least two viable alternatives, negative consequences, and measurable review triggers in `tests/unit/decisions/test_adr_validation.py`
 - [ ] T030 [P] [US1] Add contract tests for scenario, run, progress, ADR, problem-details, and export payloads against `contracts/api.openapi.yaml` in `tests/contract/test_analysis_api.py`
 - [ ] T031 [P] [US1] Add a fake-runtime end-to-end API test from scenario creation through Markdown export in `tests/integration/test_analysis_vertical_slice.py`
@@ -91,19 +91,19 @@ primary output path.
 - [ ] T036 [P] [US1] Implement the versioned `ADRDraft` schema with title 3–200 characters, confidence 0.0–1.0, maximum three unresolved questions, and structured facts, assumptions, alternatives, rationale links, consequences, risks, and metric/operator/threshold review triggers in `src/adr_forge/decisions/schemas.py`
 - [ ] T037 [US1] Implement shared deterministic ADR rules and machine-readable findings used by the app, CLI, benchmark, and tests in `src/adr_forge/decisions/validation.py`
 - [ ] T038 [P] [US1] Implement stable JSON and Markdown ADR rendering without adding missing content in `src/adr_forge/decisions/rendering.py`
-- [ ] T039 [P] [US1] Implement versioned `AnalysisStrategy` configuration with kind, model identity/revision, prompt version, generation-config hash, retrieval requirement, runtime kind, and enabled state in `src/adr_forge/strategies/models.py`
-- [ ] T040 [US1] Implement the fake strategy and Qwen Transformers runtime adapter with pinned `Qwen/Qwen3-4B-Instruct-2507`, `trust_remote_code=false`, configurable revision, and cooperative stopping criteria in `src/adr_forge/strategies/fake.py` and `src/adr_forge/strategies/qwen_runtime.py`
+- [ ] T039 [P] [US1] Implement versioned `AnalysisStrategy` configuration and a minimal in-memory registry for fake and Qwen baseline entries with kind, model identity/revision, prompt version, generation-config hash, retrieval requirement, runtime kind, enabled state, and availability in `src/adr_forge/strategies/models.py` and `src/adr_forge/strategies/registry.py`
+- [ ] T040 [US1] Implement the structured-output baseline, deterministic fake strategy, and lazy Qwen Transformers runtime adapter with pinned `Qwen/Qwen3-4B-Instruct-2507`, `trust_remote_code=false`, configurable revision, typed generation telemetry, and cooperative stopping criteria in `src/adr_forge/strategies/base.py`, `src/adr_forge/strategies/fake.py`, and `src/adr_forge/strategies/qwen_runtime.py`; add an opt-in `gpu` smoke test in `tests/integration/test_qwen_baseline.py`
 - [ ] T041 [US1] Implement raw-output preservation, structured parse, exactly one repair attempt, and distinct original/repaired validation results in `src/adr_forge/decisions/parsing.py`
 - [ ] T042 [P] [US1] Implement `AnalysisRun` with the exact state set and legal transitions from `data-model.md`, non-negative telemetry, sanitized failure detail at most 2,000 characters, and immutable terminal state in `src/adr_forge/experiments/run_models.py`
-- [ ] T043 [US1] Create run and ADR tables, terminal-state constraints, indexes, and repositories in `alembic/versions/0004_analysis_runs.py` and `src/adr_forge/experiments/run_repository.py`
-- [ ] T044 [US1] Implement one inference executor using the GPU lease, off-event-loop generation, persisted state snapshots, cooperative cancellation, and startup conversion of abandoned `running` records to `interrupted` in `src/adr_forge/strategies/executor.py`
+- [ ] T043 [US1] Create run and ADR tables, terminal-state constraints, indexes, repositories, and the minimal SQL artifact/reference catalog required to own original and repaired outputs in `alembic/versions/0004_analysis_runs.py`, `src/adr_forge/experiments/run_repository.py`, and `src/adr_forge/artifacts/repository.py`
+- [ ] T044 [US1] Implement one serialized inference executor with off-event-loop generation, persisted state snapshots, an async SSE subscription adapter over progress callbacks, cooperative cancellation, GPU preflight/lease only for GPU-backed runtimes, and startup conversion of abandoned non-terminal records to `interrupted` in `src/adr_forge/strategies/executor.py` and `src/adr_forge/system/progress.py`
 - [ ] T045 [US1] Implement create-run, execute-baseline, validate, persist raw output, persist ADR, cancel, and export application use cases in `src/adr_forge/decisions/service.py`
 
 ### API and web
 
 - [ ] T046 [US1] Implement `POST /scenarios` and `GET /scenarios/{scenarioId}` in `src/adr_forge/api/routes/scenarios.py`
-- [ ] T047 [US1] Implement run creation/status/cancel/ADR/export endpoints and best-effort SSE that begins from persisted state in `src/adr_forge/api/routes/analysis_runs.py`
-- [ ] T048 [P] [US1] Implement typed API client, problem handling, and EventSource reconnect logic in `apps/web/src/services/api.ts` and `apps/web/src/services/runEvents.ts`
+- [ ] T047 [US1] Mount the versioned `/api/v1` router, normalize request validation as problem details, implement minimal `GET /strategies`, and implement run creation/status/cancel/ADR/export endpoints plus race-free best-effort SSE that subscribes before emitting persisted state in `apps/api/main.py`, `src/adr_forge/api/problem_details.py`, `src/adr_forge/api/routes/strategies.py`, and `src/adr_forge/api/routes/analysis_runs.py`
+- [ ] T048 [P] [US1] Implement a typed client with configurable `VITE_API_BASE_URL`, problem handling, and owned EventSource reconnect logic that reads persisted state before reconnecting in `apps/web/src/services/api.ts` and `apps/web/src/services/runEvents.ts`
 - [ ] T049 [US1] Implement the Portuguese scenario form, strategy picker, progress panel, ADR review, limitation notice, and Markdown export in `apps/web/src/features/analysis/ScenarioForm.tsx`, `RunProgress.tsx`, and `AdrView.tsx`
 
 **Checkpoint**: MVP demo works with fake runtime in CI and real Qwen through an opt-in local GPU test.
@@ -156,9 +156,9 @@ primary output path.
 - [ ] T066 [US3] Implement the Knowledge Hub REST adapter with 2-second connect timeout, 15-second total timeout, one retry only for connection/408/429/5xx, bearer redaction, and fail-closed required fields in `src/adr_forge/retrieval/knowledge_hub.py`
 - [ ] T067 [P] [US3] Implement file-backed `SnapshotRetrievalProvider` for tests, CI, and exact experiment replay in `src/adr_forge/retrieval/snapshot_provider.py`
 - [ ] T068 [US3] Implement atomic retrieval snapshot creation and reuse use cases in `src/adr_forge/retrieval/service.py`
-- [ ] T069 [P] [US3] Implement versioned base and structured-prompt strategies in `src/adr_forge/strategies/base.py` and `src/adr_forge/strategies/prompted.py`
+- [ ] T069 [P] [US3] Extend the Phase 3 baseline for comparable experiment inputs and implement the versioned structured-prompt strategy in `src/adr_forge/strategies/base.py` and `src/adr_forge/strategies/prompted.py`
 - [ ] T070 [US3] Implement RAG and fine-tuned-RAG composition that treats chunks as quoted untrusted evidence and requires a snapshot in `src/adr_forge/strategies/rag.py`
-- [ ] T071 [US3] Implement strategy availability, missing-adapter, missing-snapshot, Knowledge Hub status, and `GET /strategies` behavior in `src/adr_forge/strategies/registry.py` and `src/adr_forge/api/routes/strategies.py`
+- [ ] T071 [US3] Extend the Phase 3 registry and `GET /strategies` behavior with missing-adapter, missing-snapshot, Knowledge Hub, RAG, and fine-tuned availability in `src/adr_forge/strategies/registry.py` and `src/adr_forge/api/routes/strategies.py`
 
 ### Blind evaluation
 

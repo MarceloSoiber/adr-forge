@@ -157,13 +157,17 @@ paths:
         - $ref: "#/components/parameters/RunId"
       responses:
         "200":
-          description: Best-effort server-sent progress events; clients first read persisted state.
+          description: >-
+            Best-effort server-sent progress events. The first event is the current persisted
+            snapshot, every data payload conforms to ProgressEvent, and the server closes the
+            stream after a terminal status. Clients read persisted state before reconnecting and
+            do not rely on replay.
           content:
             text/event-stream:
               schema:
                 type: string
                 examples:
-                  - "event: progress\ndata: {\"run_id\":\"...\",\"stage\":\"generating\"}\n\n"
+                  - "event: progress\ndata: {\"run_id\":\"00000000-0000-0000-0000-000000000000\",\"status\":\"running\",\"stage\":\"generating\",\"progress_percent\":50,\"progress_sequence\":3,\"updated_at\":\"2026-10-12T12:00:00Z\"}\n\n"
         "404":
           $ref: "#/components/responses/ProblemResponse"
   /analysis-runs/{runId}/cancel:
@@ -179,6 +183,8 @@ paths:
               schema:
                 $ref: "#/components/schemas/AnalysisRun"
         "409":
+          $ref: "#/components/responses/ProblemResponse"
+        "404":
           $ref: "#/components/responses/ProblemResponse"
   /analysis-runs/{runId}/adr:
     get:
@@ -211,6 +217,10 @@ paths:
       responses:
         "200":
           description: ADR export.
+          headers:
+            Content-Disposition:
+              description: Safe local attachment filename for Markdown exports.
+              schema: { type: string }
           content:
             text/markdown:
               schema:
@@ -219,6 +229,8 @@ paths:
               schema:
                 $ref: "#/components/schemas/AdrDraft"
         "409":
+          $ref: "#/components/responses/ProblemResponse"
+        "404":
           $ref: "#/components/responses/ProblemResponse"
   /experiments:
     post:
@@ -432,7 +444,7 @@ components:
         latency_ms: { type: [integer, "null"], minimum: 0 }
     StrategySummary:
       type: object
-      required: [id, version, kind, model_id, requires_retrieval, available]
+      required: [id, version, kind, model_id, model_revision, requires_retrieval, available]
       properties:
         id: { type: string }
         version: { type: string }
@@ -453,15 +465,19 @@ components:
         problem: { type: string, minLength: 20, maxLength: 20000 }
         facts:
           type: array
+          maxItems: 50
           items: { type: string, minLength: 1, maxLength: 2000 }
         constraints:
           type: array
+          maxItems: 50
           items: { type: string, minLength: 1, maxLength: 2000 }
         desired_qualities:
           type: array
+          maxItems: 20
           items: { type: string, minLength: 1, maxLength: 500 }
         candidate_alternatives:
           type: array
+          maxItems: 20
           items: { type: string, minLength: 1, maxLength: 500 }
     CreateRevisionRequest:
       type: object
@@ -481,17 +497,22 @@ components:
               source_run_id: { type: string, format: uuid }
     ScenarioRevision:
       type: object
-      required: [id, scenario_id, revision_number, problem, content_hash, created_at]
+      required: [id, scenario_id, revision_number, problem, facts, constraints, desired_qualities, candidate_alternatives, categories, content_hash, created_at]
       properties:
         id: { type: string, format: uuid }
         scenario_id: { type: string, format: uuid }
         revision_number: { type: integer, minimum: 1 }
         problem: { type: string }
-        facts: { type: array, items: { type: string } }
-        constraints: { type: array, items: { type: string } }
-        desired_qualities: { type: array, items: { type: string } }
-        candidate_alternatives: { type: array, items: { type: string } }
-        categories: { type: array, items: { type: string } }
+        facts: { type: array, maxItems: 50, items: { type: string } }
+        constraints: { type: array, maxItems: 50, items: { type: string } }
+        desired_qualities: { type: array, maxItems: 20, items: { type: string } }
+        candidate_alternatives: { type: array, maxItems: 20, items: { type: string } }
+        categories:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          description: Ordered supported matches, or exactly unsupported when no category matches.
+          items: { $ref: "#/components/schemas/DecisionCategory" }
         content_hash: { type: string, pattern: "^[a-f0-9]{64}$" }
         created_at: { type: string, format: date-time }
     ScenarioResponse:
@@ -513,7 +534,7 @@ components:
         experiment_id: { type: [string, "null"], format: uuid }
     AnalysisRun:
       type: object
-      required: [id, scenario_revision_id, strategy_id, strategy_version, status, stage, created_at]
+      required: [id, scenario_revision_id, strategy_id, strategy_version, status, stage, progress_sequence, validation_attempts, created_at, updated_at]
       properties:
         id: { type: string, format: uuid }
         scenario_revision_id: { type: string, format: uuid }
@@ -524,35 +545,152 @@ components:
           enum: [pending, waiting_resources, running, completed, needs_clarification, invalid_output, failed, cancelled, interrupted]
         stage: { type: string }
         progress_percent: { type: [integer, "null"], minimum: 0, maximum: 100 }
+        progress_sequence: { type: integer, minimum: 0 }
+        raw_output_artifact_id: { type: [string, "null"], format: uuid }
+        repaired_output_artifact_id: { type: [string, "null"], format: uuid }
+        validation_attempts:
+          type: array
+          maxItems: 2
+          items: { $ref: "#/components/schemas/OutputValidationAttempt" }
         adr_draft_id: { type: [string, "null"], format: uuid }
         failure_code: { type: [string, "null"] }
         failure_detail: { type: [string, "null"], maxLength: 2000 }
+        input_tokens: { type: [integer, "null"], minimum: 0 }
+        output_tokens: { type: [integer, "null"], minimum: 0 }
+        latency_ms: { type: [integer, "null"], minimum: 0 }
+        peak_vram_mb: { type: [integer, "null"], minimum: 0 }
         created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
         started_at: { type: [string, "null"], format: date-time }
         finished_at: { type: [string, "null"], format: date-time }
+    ProgressEvent:
+      type: object
+      required: [run_id, status, stage, progress_sequence, updated_at]
+      properties:
+        run_id: { type: string, format: uuid }
+        status:
+          type: string
+          enum: [pending, waiting_resources, running, completed, needs_clarification, invalid_output, failed, cancelled, interrupted]
+        stage: { type: string }
+        progress_percent: { type: [integer, "null"], minimum: 0, maximum: 100 }
+        progress_sequence: { type: integer, minimum: 0 }
+        failure_code: { type: [string, "null"] }
+        failure_detail: { type: [string, "null"], maxLength: 2000 }
+        updated_at: { type: string, format: date-time }
+    ValidationFinding:
+      type: object
+      required: [code, path, severity, message]
+      additionalProperties: false
+      properties:
+        code: { type: string }
+        path: { type: string }
+        severity: { type: string, enum: [error, warning] }
+        message: { type: string, maxLength: 2000 }
+    OutputValidationAttempt:
+      type: object
+      required: [attempt, output_artifact_id, parse_succeeded, findings]
+      additionalProperties: false
+      properties:
+        attempt: { type: string, enum: [original, repaired] }
+        output_artifact_id: { type: string, format: uuid }
+        parse_succeeded: { type: boolean }
+        schema_version: { type: [string, "null"] }
+        findings:
+          type: array
+          items: { $ref: "#/components/schemas/ValidationFinding" }
     AdrDraft:
       type: object
-      required: [id, analysis_run_id, schema_version, title, status, context, assumptions, unresolved_questions, alternatives, positive_consequences, negative_consequences, risks, review_triggers, confidence]
+      required: [id, analysis_run_id, schema_version, title, status, context, facts, assumptions, unresolved_questions, constraints, alternatives, decision, rationale, positive_consequences, negative_consequences, risks, review_triggers, confidence, reference_ids, created_at]
+      additionalProperties: false
       properties:
         id: { type: string, format: uuid }
         analysis_run_id: { type: string, format: uuid }
         schema_version: { type: string }
         title: { type: string, minLength: 3, maxLength: 200 }
-        status: { type: string, enum: [provisional, proposed, accepted, rejected, superseded] }
+        status: { type: string, enum: [provisional, proposed] }
         context: { type: array, minItems: 1, items: { type: string } }
         facts: { type: array, items: { type: string } }
-        assumptions: { type: array, items: { type: object, additionalProperties: true } }
-        unresolved_questions: { type: array, maxItems: 3, items: { type: object, additionalProperties: true } }
+        assumptions: { type: array, items: { $ref: "#/components/schemas/Assumption" } }
+        unresolved_questions: { type: array, maxItems: 3, items: { $ref: "#/components/schemas/UnresolvedQuestion" } }
         constraints: { type: array, items: { type: string } }
-        alternatives: { type: array, items: { type: object, additionalProperties: true } }
+        alternatives: { type: array, items: { $ref: "#/components/schemas/Alternative" } }
         decision: { type: [string, "null"] }
-        rationale: { type: array, items: { type: object, additionalProperties: true } }
+        rationale: { type: array, items: { $ref: "#/components/schemas/RationaleLink" } }
         positive_consequences: { type: array, items: { type: string } }
         negative_consequences: { type: array, items: { type: string } }
-        risks: { type: array, items: { type: object, additionalProperties: true } }
-        review_triggers: { type: array, items: { type: object, additionalProperties: true } }
+        risks: { type: array, items: { $ref: "#/components/schemas/Risk" } }
+        review_triggers: { type: array, items: { $ref: "#/components/schemas/ReviewTrigger" } }
         confidence: { type: number, minimum: 0, maximum: 1 }
         reference_ids: { type: array, items: { type: string } }
+        created_at: { type: string, format: date-time }
+    Assumption:
+      type: object
+      required: [id, statement, impact, confidence]
+      additionalProperties: false
+      properties:
+        id: { type: string }
+        statement: { type: string }
+        impact: { type: string }
+        confidence: { type: number, minimum: 0, maximum: 1 }
+    UnresolvedQuestion:
+      type: object
+      required: [id, question, impact]
+      additionalProperties: false
+      properties:
+        id: { type: string }
+        question: { type: string }
+        impact: { type: string }
+    Alternative:
+      type: object
+      required: [id, name, summary, viable, benefits, drawbacks, constraint_ids]
+      additionalProperties: false
+      properties:
+        id: { type: string }
+        name: { type: string }
+        summary: { type: string }
+        viable: { type: boolean }
+        rejection_reason: { type: [string, "null"] }
+        benefits: { type: array, items: { type: string } }
+        drawbacks: { type: array, items: { type: string } }
+        constraint_ids:
+          type: array
+          items: { type: string, pattern: "^constraint:[0-9]+$" }
+    RationaleLink:
+      type: object
+      required: [claim, evidence_kind, evidence_id]
+      additionalProperties: false
+      properties:
+        claim: { type: string }
+        evidence_kind: { type: string, enum: [fact, assumption, reference] }
+        evidence_id:
+          type: string
+          description: A fact:N position, Assumption.id, or retrieval reference ID matching evidence_kind.
+    Risk:
+      type: object
+      required: [description, likelihood, impact, mitigation]
+      additionalProperties: false
+      properties:
+        description: { type: string }
+        likelihood: { type: string, enum: [low, medium, high] }
+        impact: { type: string, enum: [low, medium, high] }
+        mitigation: { type: string }
+    ReviewTrigger:
+      type: object
+      required: [metric, operator, threshold, unit]
+      additionalProperties: false
+      properties:
+        metric: { type: string }
+        operator: { type: string, enum: [gt, gte, lt, lte, eq] }
+        threshold: { type: number }
+        unit: { type: string }
+    DecisionCategory:
+      type: string
+      enum:
+        - sql_vs_nosql
+        - sync_vs_async
+        - modular_monolith_vs_microservices
+        - containers_vs_serverless_vs_traditional
+        - unsupported
     CreateExperimentRequest:
       type: object
       required: [name, scenario_revision_ids, strategy_refs, rubric_version_id, code_revision]
