@@ -85,7 +85,7 @@ primary output path.
 
 ### Domain and persistence
 
-- [ ] T033 [P] [US1] Implement `DecisionScenario` with title 3–200 characters, language initially `pt-BR`, current revision at least 1, and `ScenarioRevision` with problem 20–20,000 characters, item limits from `data-model.md`, unique `(scenario_id, revision_number)`, and immutable `content_hash` in `src/adr_forge/scenarios/models.py`
+- [X] T033 [P] [US1] Implement `DecisionScenario` with title 3–200 characters, language initially `pt-BR`, current revision at least 1, and `ScenarioRevision` with problem 20–20,000 characters, item limits from `data-model.md`, unique `(scenario_id, revision_number)`, and immutable `content_hash` in `src/adr_forge/scenarios/models.py`
 - [ ] T034 [US1] Create scenario and revision tables, indexes, repository, and first-revision transaction in `alembic/versions/0003_scenarios.py` and `src/adr_forge/scenarios/repository.py`
 - [ ] T035 [US1] Implement scenario creation, supported-category classification contract, retrieval, and current-revision use cases in `src/adr_forge/scenarios/service.py`
 - [ ] T036 [P] [US1] Implement the versioned `ADRDraft` schema with title 3–200 characters, confidence 0.0–1.0, maximum three unresolved questions, and structured facts, assumptions, alternatives, rationale links, consequences, risks, and metric/operator/threshold review triggers in `src/adr_forge/decisions/schemas.py`
