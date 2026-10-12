@@ -32,8 +32,15 @@ class QuotaStatus:
 
 
 class ArtifactQuota:
-    def __init__(self, catalog: ArtifactCatalog, disk: DiskCapacityProbe, *, warning_bytes: int,
-                 limit_bytes: int, reserve_bytes: int) -> None:
+    def __init__(
+        self,
+        catalog: ArtifactCatalog,
+        disk: DiskCapacityProbe,
+        *,
+        warning_bytes: int,
+        limit_bytes: int,
+        reserve_bytes: int,
+    ) -> None:
         self.catalog = catalog
         self.disk = disk
         self.warning_bytes = warning_bytes

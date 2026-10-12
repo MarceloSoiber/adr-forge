@@ -99,7 +99,8 @@ class HostResourceProbe:
                 self._parse_process(row)
                 for row in self._nvidia_smi(
                     executable,
-                    "--query-compute-apps=pid,process_name,used_memory", "csv,noheader,nounits"
+                    "--query-compute-apps=pid,process_name,used_memory",
+                    "csv,noheader,nounits",
                 )
                 if row.strip()
             )

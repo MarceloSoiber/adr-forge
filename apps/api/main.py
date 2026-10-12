@@ -47,4 +47,5 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     application.include_router(system_router)
     return application
 
+
 app = create_app()

@@ -42,4 +42,3 @@ class ArtifactReference:
     owner_type: str
     owner_id: str
     created_at: datetime
-

@@ -1,2 +1,1 @@
 """Artifact catalog and storage."""
-
