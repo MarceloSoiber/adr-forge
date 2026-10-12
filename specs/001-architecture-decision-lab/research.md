@@ -168,3 +168,67 @@ must remain fast and available without specialized hardware.
 - GPT-OSS is not part of ADR Forge generation and must be unloaded before Qwen GPU work.
 - The Proxmox GitLab VM is a later CPU-only test target until its capacity is verified.
 - No unresolved `NEEDS CLARIFICATION` items remain for implementation planning.
+
+## Phase 2 Foundation Refinements
+
+### Decision 11 — Inject resource and reference queries through shared ports
+
+**Decision**: Define disk-capacity and artifact-reference query ports beside the existing repository
+and transaction ports. The system module implements host probes; the artifact module consumes the
+ports without importing host-infrastructure code.
+
+**Rationale**: Artifact quota and safe deletion need information owned outside the artifact store.
+Explicit ports preserve module boundaries and make CPU-only fixtures deterministic.
+
+**Alternatives considered**:
+
+- Read disk state directly inside the artifact service: rejected because it couples policy to the
+  host and makes race and threshold tests harder.
+- Discover artifact references by inspecting future tables: rejected because it is fragile and
+  cannot guarantee deletion safety.
+
+### Decision 12 — Register artifact ownership and reconcile conservatively
+
+**Decision**: Add an `ArtifactReference` registry maintained in the owner's unit of work. Startup
+reconciliation removes stale temporary files but only reports missing referenced files and
+unregistered finalized objects.
+
+**Rationale**: Later capabilities need a stable way to protect artifacts before all owner tables
+exist. Conservative reconciliation avoids turning crash recovery into an implicit destructive
+cleanup operation.
+
+**Alternatives considered**:
+
+- Generic owner IDs stored only in artifact metadata: rejected because multiple owners and safe
+  removal are not enforceable.
+- Delete every unregistered file at startup: rejected because a crash between atomic move and
+  metadata commit could destroy recoverable work.
+
+### Decision 13 — Use an operating-system file lock for the GPU lease
+
+**Decision**: Use a non-blocking local file lock with diagnostic ownership metadata. Kernel lock
+ownership, rather than PID-only checks, provides cross-process exclusion and crash release.
+
+**Rationale**: API, benchmark, and training processes must coordinate without a broker. An OS lock
+fits the single-host boundary and is testable with local subprocesses on CPU-only CI.
+
+**Alternatives considered**:
+
+- In-process semaphore: rejected because separate CLI and API processes could both enter GPU work.
+- PID file alone: rejected because stale files and PID reuse do not provide reliable ownership.
+
+### Decision 14 — Keep readiness local and capability-aware
+
+**Decision**: Readiness requires valid configuration, migrated SQLite, and safe writable artifact
+storage. GPU, model, and Knowledge Hub state are capability findings; `doctor` reports them with
+documented exit semantics, but their absence does not make the base API unready.
+
+**Rationale**: The local application must remain usable for CPU-only and non-RAG paths while still
+giving actionable diagnostics for unavailable optional capabilities.
+
+**Alternatives considered**:
+
+- Require every integration for readiness: rejected because optional service or GPU downtime would
+  disable unrelated local features.
+- Always return ready after process startup: rejected because an invalid database or unwritable
+  artifact root blocks every meaningful workflow.

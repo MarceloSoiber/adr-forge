@@ -1,6 +1,6 @@
 # Implementation Plan: Architecture Decision Lab
 
-**Branch**: `main` | **Date**: 2026-10-10 | **Spec**: [spec.md](spec.md)
+**Branch**: `feat/3-phase-2-foundational-components` | **Date**: 2026-10-12 | **Spec**: [spec.md](spec.md)
 
 **Input**: Feature specification from `specs/001-architecture-decision-lab/spec.md`
 
@@ -245,6 +245,137 @@ organized by capability; infrastructure implementations depend inward on typed p
 - Move metadata to PostgreSQL only when multiple writers or users make SQLite contention visible.
 - Add a dedicated vector store only after 50,000 reference chunks, retrieval over 500 ms, or
   complex concurrent filtering.
+
+## Phase 2 Development Plan — Foundational Components
+
+### Outcome and Boundary
+
+Phase 2 delivers the shared foundation required by every user story: deterministic identity and
+hashing, validated local configuration, transactional SQLite persistence, safe artifact storage,
+resource diagnostics and GPU exclusion, progress primitives, stable ports, system endpoints, and
+the read-only `doctor` command. It covers tasks T011–T027 from [tasks.md](tasks.md).
+
+This phase does not implement scenarios, ADR generation, model loading, Knowledge Hub calls,
+training, benchmarks, or the web experience. Integration status may report configuration and
+availability, but live integration behavior remains in its owning later phase.
+
+### Delivery Sequence
+
+| Wave | Tasks | Deliverable | Entry dependency | Exit evidence |
+| --- | --- | --- | --- | --- |
+| 1 — Shared contracts | T011, T012, T015, T016, T025 | Typed configuration, deterministic helpers, safe errors/logs, and dependency-inversion ports | Phase 1 setup complete | Unit tests prove canonical hashing, timezone-aware clocks, loopback rejection, redaction, and stable problem codes |
+| 2 — Persistence kernel | T013, T014 | Async SQLite engine, WAL, sessions, unit of work, and initial Alembic revision | Wave 1 configuration and time helpers | A temporary database migrates from empty to head; transaction commit/rollback and WAL behavior pass without global state |
+| 3 — Resource coordination | T021–T024 | Sanitized host probes, exclusive cross-process GPU lease, progress snapshots, and cooperative cancellation | Wave 1 settings and resource ports | CPU fixtures prove insufficient-VRAM diagnostics, external-process reporting, lease exclusion, cancellation idempotence, and secret-free output |
+| 4 — Artifact subsystem | T017–T020 | Artifact catalog, migration, content-addressed store, quota accounting, and prune/list services | Waves 1–3; T017 may start after Wave 2 | Property and integration tests prove traversal rejection, atomic cleanup, hash stability, reference-safe deletion, and 40/50 GB thresholds |
+| 5 — Delivery shells | T026, T027 | FastAPI factory/system routes and Typer `doctor` in human and JSON modes | Waves 1–4 | OpenAPI/CLI contract tests pass; readiness and doctor expose consistent sanitized state and documented exit codes |
+| 6 — Foundation gate | T011–T027 | Integrated CPU-only foundation ready for user-story work | Waves 1–5 | Full Python quality gate, migration smoke test, API/CLI contract suite, and temporary-root integration suite pass with CUDA and live integrations disabled |
+
+Tasks marked `[P]` may be developed concurrently only inside their wave and only when they do not
+edit the same shared contract. Database migrations remain serialized. Each wave lands with its own
+tests and keeps the repository runnable; no later wave may compensate for a failing earlier gate.
+T019 and T023 tests may be authored against agreed interfaces in parallel, but merge with the
+implementations they verify rather than being treated as independently complete deliverables.
+
+### Dependency Rules
+
+- Configuration is the composition root: persistence, artifact storage, resource probes, API, and
+  CLI receive validated settings rather than reading environment variables throughout the code.
+- T025 precedes infrastructure implementations: repository, transaction, disk-capacity,
+  reference-query, progress, and diagnostic ports must be usable by fakes without importing
+  FastAPI, SQLAlchemy, or model libraries.
+- Persistence exposes session and unit-of-work boundaries before any repository-backed service is
+  added. Alembic owns schema evolution; application startup does not create tables implicitly.
+- Artifact metadata is committed only after a temporary file is completely written, hashed, and
+  atomically moved under the configured root. Failed metadata commits leave no published reference.
+- Artifact quota uses both catalog totals and host free-disk reserve. The 40 GB warning is
+  observable; the 50 GB limit is a hard precondition failure.
+- Resource probes return typed, sanitized observations. Probe failure is data in the result, not a
+  reason to crash health endpoints, and ADR Forge never terminates an external GPU process.
+- The GPU lease is exclusive across processes and released on normal exit, cancellation, and
+  exceptions. Progress publication and cancellation remain runtime-agnostic for later model and
+  training adapters.
+- API and CLI are adapters over the same services. They must not reimplement validation, quota,
+  readiness, error-code, or redaction rules.
+
+### Resolved Foundation Decisions
+
+- Canonical JSON uses UTF-8, sorted object keys, compact separators, normalized supported scalar
+  encodings, and explicit serializers for timezone-aware UTC datetimes and finite decimals. It
+  rejects naive datetimes, non-finite numbers, and unsupported values instead of hashing a lossy
+  representation.
+- `artifact_free_disk_reserve_bytes` is a typed setting with a 5 GiB default. Configuration
+  validates a positive reserve and `warning_bytes < limit_bytes`; the initial warning and limit
+  remain 40 GB and 50 GB.
+- T025 defines a `DiskCapacityProbe`; T021 implements it and T020 receives it by injection. This
+  preserves the rule that `artifacts` does not depend on `system` infrastructure.
+- T017 adds an `ArtifactReference` registry linked to the artifact and an owning entity identity.
+  Artifact-owning services add or remove references in the same unit of work as their metadata;
+  delete and prune query this registry rather than guessing future foreign-key relationships.
+- Physical objects use a hash-derived canonical relative path. Multiple logical records that share
+  the path count once toward quota; deletion requires no artifact record or retained reference to
+  need that physical object.
+- Startup artifact reconciliation removes only stale temporary files. Missing referenced files and
+  unregistered finalized objects are reported as readiness/doctor findings; finalized objects are
+  never silently deleted.
+- The GPU lease uses a non-blocking operating-system file lock under a configured local lock
+  directory. PID, process start time, and an ownership token are diagnostic metadata; the kernel
+  releases the lock after a crash, and only the owning handle can release it.
+- Alembic's `alembic_version` is the sole schema-version table. T014 must not introduce a second
+  application-owned schema counter.
+- Readiness depends on valid configuration, a reachable/migrated SQLite database, and a writable
+  artifact root with required reserve. Missing GPU, model files, or optional Knowledge Hub access
+  are sanitized capability findings and do not make the base API unready.
+- `doctor` checks model availability from configured local/cache metadata without downloading,
+  validates tracked dataset schemas, and uses a bounded Knowledge Hub health probe rather than the
+  retrieval endpoint. Its tests use a fake HTTP transport; unavailability maps to the documented
+  integration exit code without exposing credentials.
+
+### Test-First Work per Wave
+
+Before implementation in each wave, add failing tests for the invariant being introduced. Use
+temporary directories, temporary SQLite databases, fake clocks/probes, and injected settings; the
+default suite must not require a GPU, network, Knowledge Hub, or model download.
+
+Required suites:
+
+- `tests/unit/shared/`: identity, canonical JSON/hash, settings, problem details, and redaction;
+- `tests/integration/persistence/`: migration-to-head, WAL, commit, rollback, and session cleanup;
+- `tests/unit/artifacts/test_store.py`: the T019 property tests plus quota/prune service cases;
+- `tests/unit/system/test_gpu_preflight.py`: the T023 CPU fixtures plus lease cleanup and progress
+  cancellation cases, including a real local multiprocess lease exclusion test;
+- `tests/contract/test_system_api.py`: health, readiness, resources, CORS, request IDs, and
+  `application/problem+json` responses;
+- `tests/contract/test_doctor_cli.py`: human/JSON schema, exit codes, read-only behavior, and secret
+  redaction.
+
+### Completion Gate
+
+Phase 2 is complete only when all T011–T027 acceptance evidence passes and the following conditions
+hold together:
+
+1. A clean temporary database upgrades to Alembic head and supports a committed and rolled-back
+   unit of work.
+2. An artifact can be written, deduplicated by hash, listed, protected while referenced, and
+   pruned after it becomes eligible; partial writes and traversal attempts publish nothing.
+3. Fake resource probes produce stable readiness, resource, lease, and diagnostic results without
+   exposing tokens, prompts, retrieved content, or unrestricted filesystem paths.
+4. `/health`, `/readiness`, `/system/resources`, integration status, and `adr-forge doctor` agree
+   on shared state and match the documented API and CLI contracts.
+5. Formatting, linting, strict type checking, and all tests excluding `gpu` and
+   `live_integration` pass on CPU only.
+
+### Risks and Controls
+
+| Risk | Control |
+| --- | --- |
+| Async SQLAlchemy sessions leak or cross task boundaries | One session per unit of work, explicit transaction ownership, rollback tests, and deterministic disposal |
+| Path normalization differs across platforms | Resolve against the configured root, reject absolute/traversing paths before I/O, and cover generated adversarial paths |
+| Filesystem and metadata diverge after failure | Temporary write plus atomic move, narrow transaction boundary, cleanup on failure, and reconciliation-ready lookup semantics |
+| GPU diagnostics are unavailable on CPU CI | Injectable probes and fixture-driven results; live GPU validation remains explicitly marked |
+| Health endpoints expose secrets or become expensive | Sanitized DTOs, redaction tests, bounded probes, and no model loading or live inference |
+| API and CLI behavior drift | Reuse the same application services and assert both adapters against stable contracts |
+| Generic artifact references lose integrity | Enforce owner type/identity validation in the reference service and require reference updates in the owner's unit of work |
+| Concurrent writers exceed artifact quota | Reserve or revalidate capacity immediately before publication and test concurrent writers against one temporary root |
 
 ## Complexity Tracking
 

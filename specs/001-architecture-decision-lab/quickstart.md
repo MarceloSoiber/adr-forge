@@ -36,6 +36,29 @@ npm --prefix apps/web run build
 Expected result: all deterministic, repository, contract, and frontend tests pass without loading a
 language model or contacting Knowledge Hub.
 
+## Validate the Phase 2 foundation
+
+After T011–T027 are implemented, run the focused foundation gate with temporary storage and no GPU
+or live integration:
+
+```bash
+uv run alembic upgrade head
+uv run pytest \
+  tests/unit/shared \
+  tests/integration/persistence \
+  tests/unit/artifacts \
+  tests/unit/system \
+  tests/contract/test_system_api.py \
+  tests/contract/test_doctor_cli.py \
+  -m "not gpu and not live_integration"
+uv run adr-forge doctor --json
+```
+
+Expected result: migrations reach head; shared, persistence, artifact, and resource tests pass; the
+doctor command returns a sanitized JSON result without downloading a model or changing system
+state. Optional integrations may be reported as unavailable through bounded probes. Use temporary
+overrides for the SQLite URL and artifact root when running destructive artifact-prune fixtures.
+
 ## Validate resources and integrations
 
 ```bash
