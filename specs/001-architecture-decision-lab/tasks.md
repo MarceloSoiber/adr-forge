@@ -77,11 +77,11 @@ primary output path.
 
 ### Tests first
 
-- [ ] T028 [P] [US1] Add unit tests for immutable first-revision numbering, canonical hashes, per-scenario duplicate rejection, and one/multiple/unsupported category values in `tests/unit/scenarios/test_scenario.py`
+- [X] T028 [P] [US1] Add unit tests for immutable first-revision numbering, canonical hashes, per-scenario duplicate rejection, and one/multiple/unsupported category values in `tests/unit/scenarios/test_scenario.py`
 - [X] T029 [P] [US1] Add unit and property tests for provisional versus conclusive ADR invariants, including maximum three questions, at least two viable alternatives, negative consequences, and measurable review triggers in `tests/unit/decisions/test_adr_validation.py`
-- [ ] T030 [P] [US1] Add contract tests for scenario, run, progress, ADR, problem-details, and export payloads against `contracts/api.openapi.yaml` in `tests/contract/test_analysis_api.py`
-- [ ] T031 [P] [US1] Add a fake-runtime end-to-end API test from scenario creation through Markdown export in `tests/integration/test_analysis_vertical_slice.py`
-- [ ] T032 [P] [US1] Add frontend tests for scenario submission, progress reconnect, validation failure, ADR sections, and export action in `apps/web/src/features/analysis/AnalysisFlow.test.tsx`
+- [X] T030 [P] [US1] Add contract tests for scenario, run, progress, ADR, problem-details, and export payloads against `contracts/api.openapi.yaml` in `tests/contract/test_analysis_api.py`
+- [X] T031 [P] [US1] Add a fake-runtime end-to-end API test from scenario creation through Markdown export in `tests/integration/test_analysis_vertical_slice.py`
+- [X] T032 [P] [US1] Add frontend tests for scenario submission, progress reconnect, validation failure, ADR sections, and export action in `apps/web/src/features/analysis/AnalysisFlow.test.tsx`
 
 ### Domain and persistence
 

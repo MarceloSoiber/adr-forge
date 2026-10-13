@@ -30,6 +30,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     application = FastAPI(title="ADR Forge Local API", version="0.1.0", lifespan=lifespan)
     application.state.settings = resolved
     application.state.resources = HostResourceProbe()
+    application.state.analysis_store = {"scenarios": {}, "revisions": {}, "runs": {}, "adrs": {}}
     application.add_middleware(
         CORSMiddleware,
         allow_origins=[f"http://{resolved.web_host}:{resolved.web_port}"],

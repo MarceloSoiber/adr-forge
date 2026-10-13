@@ -1,16 +1,23 @@
 from __future__ import annotations
 
+import asyncio
+from pathlib import Path
 from uuid import uuid4
 
 import pytest
+from alembic import command
+from alembic.config import Config
 from pydantic import ValidationError
+from sqlalchemy.exc import IntegrityError
 
+from adr_forge.persistence.database import create_database_engine, create_session_factory
 from adr_forge.scenarios.models import (
     DecisionCategory,
     DecisionScenario,
     ScenarioRevision,
     classify_categories,
 )
+from adr_forge.scenarios.repository import ScenarioRepository
 
 
 def _revision(*, categories: list[DecisionCategory]) -> ScenarioRevision:
@@ -24,6 +31,18 @@ def _revision(*, categories: list[DecisionCategory]) -> ScenarioRevision:
         candidate_alternatives=["monólito modular", "microsserviços"],
         categories=categories,
     )
+
+
+@pytest.fixture
+def migrated_scenario_database(tmp_path: Path) -> Path:
+    """Return a temporary SQLite database migrated through scenario revisions."""
+    database_path = tmp_path / "scenarios.sqlite3"
+    repository_root = Path(__file__).parents[3]
+    config = Config()
+    config.set_main_option("script_location", str(repository_root / "alembic"))
+    config.set_main_option("sqlalchemy.url", f"sqlite+aiosqlite:///{database_path}")
+    command.upgrade(config, "0003_scenarios")
+    return database_path
 
 
 def test_first_revision_is_immutable_and_numbered_one() -> None:
@@ -46,18 +65,34 @@ def test_canonical_content_hash_excludes_identity_but_preserves_content() -> Non
     assert changed.content_hash != first.content_hash
 
 
-def test_duplicate_hash_is_rejected_per_scenario() -> None:
-    scenario_id = uuid4()
+def test_duplicate_hash_is_rejected_per_scenario(migrated_scenario_database: Path) -> None:
+    """The database unique index rejects identical canonical content per scenario."""
+    asyncio.run(_assert_duplicate_hash_is_rejected(migrated_scenario_database))
+
+
+async def _assert_duplicate_hash_is_rejected(database_path: Path) -> None:
+    engine = create_database_engine(f"sqlite+aiosqlite:///{database_path}")
+    repository = ScenarioRepository(create_session_factory(engine))
+    scenario = DecisionScenario(title="Escolha de persistência")
     first = ScenarioRevision(
-        scenario_id=scenario_id,
+        scenario_id=scenario.id,
         revision_number=1,
         problem="Precisamos escolher uma arquitetura que mantenha o sistema operável.",
         categories=[DecisionCategory.SQL_VS_NOSQL],
     )
     duplicate = first.model_copy(update={"revision_number": 2})
 
-    assert first.scenario_id == duplicate.scenario_id
-    assert first.content_hash == duplicate.content_hash
+    try:
+        await repository.create_first(scenario, first)
+
+        with pytest.raises(
+            IntegrityError,
+            match=r"scenario_revisions\.scenario_id, scenario_revisions\.content_hash",
+        ):
+            async with repository._session_factory.begin() as session:
+                await repository._insert_revision(session, duplicate)
+    finally:
+        await engine.dispose()
 
 
 @pytest.mark.parametrize(

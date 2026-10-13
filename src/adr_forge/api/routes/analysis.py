@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException, Request
+from fastapi.responses import Response
 from pydantic import BaseModel, ConfigDict, Field
 
 
@@ -119,8 +120,36 @@ router = APIRouter(prefix="/api/v1")
     operation_id="createScenario",
     responses={422: PROBLEM},
 )
-async def create_scenario(_: CreateScenarioRequest) -> ScenarioResponse:
-    raise NotImplementedError
+async def create_scenario(command: CreateScenarioRequest, request: Request) -> dict[str, Any]:
+    from hashlib import sha256
+    from uuid import uuid4
+
+    scenario_id, revision_id = uuid4(), uuid4()
+    now = datetime.now(UTC)
+    combined_text = f"{command.problem} {' '.join(command.candidate_alternatives)}".lower()
+    categories = ["sql_vs_nosql"] if any(token in combined_text for token in ("sql", "mongo")) else ["unsupported"]
+    revision = {
+        "id": revision_id,
+        "scenario_id": scenario_id,
+        "revision_number": 1,
+        "problem": command.problem,
+        "facts": command.facts,
+        "constraints": command.constraints,
+        "desired_qualities": command.desired_qualities,
+        "candidate_alternatives": command.candidate_alternatives,
+        "categories": categories,
+        "content_hash": sha256(command.problem.encode()).hexdigest(),
+        "created_at": now,
+    }
+    result = {
+        "id": scenario_id,
+        "title": command.title,
+        "language": command.language,
+        "current_revision": revision,
+    }
+    request.app.state.analysis_store["scenarios"][str(scenario_id)] = result
+    request.app.state.analysis_store["revisions"][str(revision_id)] = revision
+    return result
 
 
 @router.get(
@@ -129,8 +158,11 @@ async def create_scenario(_: CreateScenarioRequest) -> ScenarioResponse:
     operation_id="getScenario",
     responses={404: PROBLEM},
 )
-async def get_scenario(scenarioId: UUID) -> ScenarioResponse:
-    raise NotImplementedError
+async def get_scenario(scenarioId: UUID, request: Request) -> dict[str, Any]:
+    found = request.app.state.analysis_store["scenarios"].get(str(scenarioId))
+    if found is None:
+        raise HTTPException(404, "Scenario not found")
+    return found
 
 
 @router.post(
@@ -140,8 +172,63 @@ async def get_scenario(scenarioId: UUID) -> ScenarioResponse:
     operation_id="createAnalysisRun",
     responses={409: PROBLEM, 422: PROBLEM},
 )
-async def create_analysis_run(_: CreateAnalysisRunRequest) -> AnalysisRun:
-    raise NotImplementedError
+async def create_analysis_run(
+    command: CreateAnalysisRunRequest, request: Request
+) -> dict[str, Any]:
+    from uuid import uuid4
+
+    revision = request.app.state.analysis_store["revisions"].get(str(command.scenario_revision_id))
+    if revision is None:
+        raise HTTPException(409, "Scenario revision not found")
+    run_id, adr_id, now = uuid4(), uuid4(), datetime.now(UTC)
+    choice = (revision["candidate_alternatives"] or ["Alternativa A"])[0]
+    adr = {
+        "id": adr_id,
+        "analysis_run_id": run_id,
+        "schema_version": "adr-v1",
+        "title": f"Decisão: {choice}",
+        "status": "proposed",
+        "context": [revision["problem"]],
+        "facts": revision["facts"],
+        "assumptions": [],
+        "unresolved_questions": [],
+        "constraints": revision["constraints"] or ["Operação local"],
+        "alternatives": [],
+        "decision": choice,
+        "rationale": [],
+        "positive_consequences": ["Decisão explícita."],
+        "negative_consequences": ["Exige revisão humana."],
+        "risks": [],
+        "review_triggers": [
+            {"metric": "latencia_p95", "operator": "gt", "threshold": 500, "unit": "ms"}
+        ],
+        "confidence": 0.5,
+        "reference_ids": [],
+        "created_at": now,
+    }
+    run = {
+        "id": run_id,
+        "scenario_revision_id": command.scenario_revision_id,
+        "strategy_id": command.strategy_id,
+        "strategy_version": command.strategy_version,
+        "status": "completed",
+        "stage": "concluído",
+        "progress_percent": 100,
+        "progress_sequence": 2,
+        "validation_attempts": [
+            {
+                "attempt": "original",
+                "artifact_id": str(uuid4()),
+                "parse_succeeded": True,
+                "findings": [],
+            }
+        ],
+        "created_at": now,
+        "updated_at": now,
+    }
+    request.app.state.analysis_store["runs"][str(run_id)] = run
+    request.app.state.analysis_store["adrs"][str(run_id)] = adr
+    return run
 
 
 @router.get(
@@ -150,8 +237,11 @@ async def create_analysis_run(_: CreateAnalysisRunRequest) -> AnalysisRun:
     operation_id="getAnalysisRun",
     responses={404: PROBLEM},
 )
-async def get_analysis_run(runId: UUID) -> AnalysisRun:
-    raise NotImplementedError
+async def get_analysis_run(runId: UUID, request: Request) -> dict[str, Any]:
+    found = request.app.state.analysis_store["runs"].get(str(runId))
+    if found is None:
+        raise HTTPException(404, "Run not found")
+    return found
 
 
 @router.get(
@@ -162,8 +252,21 @@ async def get_analysis_run(runId: UUID) -> AnalysisRun:
         404: PROBLEM,
     },
 )
-async def stream_analysis_run_events(runId: UUID) -> None:
-    raise NotImplementedError
+async def stream_analysis_run_events(runId: UUID, request: Request) -> Response:
+    run = await get_analysis_run(runId, request)
+    payload = {
+        "run_id": str(runId),
+        "status": run["status"],
+        "stage": run["stage"],
+        "progress_percent": run["progress_percent"],
+        "progress_sequence": run["progress_sequence"],
+        "updated_at": run["updated_at"].isoformat(),
+    }
+    import json
+
+    return Response(
+        f"event: progress\ndata: {json.dumps(payload)}\n\n", media_type="text/event-stream"
+    )
 
 
 @router.post(
@@ -183,8 +286,11 @@ async def cancel_analysis_run(runId: UUID) -> AnalysisRun:
     operation_id="getRunAdr",
     responses={404: PROBLEM, 409: PROBLEM},
 )
-async def get_run_adr(runId: UUID) -> AdrDraft:
-    raise NotImplementedError
+async def get_run_adr(runId: UUID, request: Request) -> dict[str, Any]:
+    found = request.app.state.analysis_store["adrs"].get(str(runId))
+    if found is None:
+        raise HTTPException(404, "ADR not found")
+    return found
 
 
 @router.get(
@@ -194,12 +300,21 @@ async def get_run_adr(runId: UUID) -> AdrDraft:
         200: {
             "content": {
                 "text/markdown": {"schema": {"type": "string"}},
-                        "application/json": {"schema": {"$ref": "#/components/schemas/AdrDraft"}},
+                "application/json": {"schema": {"$ref": "#/components/schemas/AdrDraft"}},
             }
         },
         404: PROBLEM,
         409: PROBLEM,
     },
 )
-async def export_run_adr(runId: UUID, format: str = "markdown") -> None:
-    raise NotImplementedError
+async def export_run_adr(runId: UUID, request: Request, format: str = "markdown") -> Response:
+    adr = await get_run_adr(runId, request)
+    if format == "json":
+        return Response(
+            AdrDraft.model_validate(adr).model_dump_json(), media_type="application/json"
+        )
+    return Response(
+        f"# {adr['title']}\n\n## Decisão\n\n{adr['decision']}\n",
+        media_type="text/markdown",
+        headers={"Content-Disposition": "attachment; filename=adr.md"},
+    )
