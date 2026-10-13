@@ -78,7 +78,7 @@ primary output path.
 ### Tests first
 
 - [ ] T028 [P] [US1] Add unit tests for immutable first-revision numbering, canonical hashes, per-scenario duplicate rejection, and one/multiple/unsupported category values in `tests/unit/scenarios/test_scenario.py`
-- [ ] T029 [P] [US1] Add unit and property tests for provisional versus conclusive ADR invariants, including maximum three questions, at least two viable alternatives, negative consequences, and measurable review triggers in `tests/unit/decisions/test_adr_validation.py`
+- [X] T029 [P] [US1] Add unit and property tests for provisional versus conclusive ADR invariants, including maximum three questions, at least two viable alternatives, negative consequences, and measurable review triggers in `tests/unit/decisions/test_adr_validation.py`
 - [ ] T030 [P] [US1] Add contract tests for scenario, run, progress, ADR, problem-details, and export payloads against `contracts/api.openapi.yaml` in `tests/contract/test_analysis_api.py`
 - [ ] T031 [P] [US1] Add a fake-runtime end-to-end API test from scenario creation through Markdown export in `tests/integration/test_analysis_vertical_slice.py`
 - [ ] T032 [P] [US1] Add frontend tests for scenario submission, progress reconnect, validation failure, ADR sections, and export action in `apps/web/src/features/analysis/AnalysisFlow.test.tsx`
@@ -86,12 +86,12 @@ primary output path.
 ### Domain and persistence
 
 - [X] T033 [P] [US1] Implement `DecisionScenario` with title 3–200 characters, language initially `pt-BR`, current revision at least 1, and `ScenarioRevision` with problem 20–20,000 characters, item limits from `data-model.md`, unique `(scenario_id, revision_number)`, and immutable `content_hash` in `src/adr_forge/scenarios/models.py`
-- [ ] T034 [US1] Create scenario and revision tables, indexes, repository, and first-revision transaction in `alembic/versions/0003_scenarios.py` and `src/adr_forge/scenarios/repository.py`
-- [ ] T035 [US1] Implement scenario creation, supported-category classification contract, retrieval, and current-revision use cases in `src/adr_forge/scenarios/service.py`
-- [ ] T036 [P] [US1] Implement the versioned `ADRDraft` schema with title 3–200 characters, confidence 0.0–1.0, maximum three unresolved questions, and structured facts, assumptions, alternatives, rationale links, consequences, risks, and metric/operator/threshold review triggers in `src/adr_forge/decisions/schemas.py`
-- [ ] T037 [US1] Implement shared deterministic ADR rules and machine-readable findings used by the app, CLI, benchmark, and tests in `src/adr_forge/decisions/validation.py`
-- [ ] T038 [P] [US1] Implement stable JSON and Markdown ADR rendering without adding missing content in `src/adr_forge/decisions/rendering.py`
-- [ ] T039 [P] [US1] Implement versioned `AnalysisStrategy` configuration and a minimal in-memory registry for fake and Qwen baseline entries with kind, model identity/revision, prompt version, generation-config hash, retrieval requirement, runtime kind, enabled state, and availability in `src/adr_forge/strategies/models.py` and `src/adr_forge/strategies/registry.py`
+- [X] T034 [US1] Create scenario and revision tables, indexes, repository, and first-revision transaction in `alembic/versions/0003_scenarios.py` and `src/adr_forge/scenarios/repository.py`
+- [X] T035 [US1] Implement scenario creation, supported-category classification contract, retrieval, and current-revision use cases in `src/adr_forge/scenarios/service.py`
+- [X] T036 [P] [US1] Implement the versioned `ADRDraft` schema with title 3–200 characters, confidence 0.0–1.0, maximum three unresolved questions, and structured facts, assumptions, alternatives, rationale links, consequences, risks, and metric/operator/threshold review triggers in `src/adr_forge/decisions/schemas.py`
+- [X] T037 [US1] Implement shared deterministic ADR rules and machine-readable findings used by the app, CLI, benchmark, and tests in `src/adr_forge/decisions/validation.py`
+- [X] T038 [P] [US1] Implement stable JSON and Markdown ADR rendering without adding missing content in `src/adr_forge/decisions/rendering.py`
+- [X] T039 [P] [US1] Implement versioned `AnalysisStrategy` configuration and a minimal in-memory registry for fake and Qwen baseline entries with kind, model identity/revision, prompt version, generation-config hash, retrieval requirement, runtime kind, enabled state, and availability in `src/adr_forge/strategies/models.py` and `src/adr_forge/strategies/registry.py`
 - [ ] T040 [US1] Implement the structured-output baseline, deterministic fake strategy, and lazy Qwen Transformers runtime adapter with pinned `Qwen/Qwen3-4B-Instruct-2507`, `trust_remote_code=false`, configurable revision, typed generation telemetry, and cooperative stopping criteria in `src/adr_forge/strategies/base.py`, `src/adr_forge/strategies/fake.py`, and `src/adr_forge/strategies/qwen_runtime.py`; add an opt-in `gpu` smoke test in `tests/integration/test_qwen_baseline.py`
 - [ ] T041 [US1] Implement raw-output preservation, structured parse, exactly one repair attempt, and distinct original/repaired validation results in `src/adr_forge/decisions/parsing.py`
 - [ ] T042 [P] [US1] Implement `AnalysisRun` with the exact state set and legal transitions from `data-model.md`, non-negative telemetry, sanitized failure detail at most 2,000 characters, and immutable terminal state in `src/adr_forge/experiments/run_models.py`

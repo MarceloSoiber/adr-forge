@@ -4,7 +4,8 @@ from math import inf, nan
 from uuid import uuid4
 
 import pytest
-from hypothesis import given, strategies as st
+from hypothesis import given
+from hypothesis import strategies as st
 from pydantic import ValidationError
 
 from adr_forge.decisions.schemas import (
@@ -62,7 +63,9 @@ def _proposed_draft() -> ADRDraft:
         negative_consequences=["O particionamento exigirá revisão futura."],
         risks=[],
         review_triggers=[
-            ReviewTrigger(metric="eventos_por_dia", operator="gte", threshold=1_000_000, unit="eventos/dia")
+            ReviewTrigger(
+                metric="eventos_por_dia", operator="gte", threshold=1_000_000, unit="eventos/dia"
+            )
         ],
         confidence=0.8,
         reference_ids=[],
@@ -100,9 +103,7 @@ def test_proposed_adr_requires_a_measurable_review_trigger() -> None:
 
 @pytest.mark.parametrize("threshold", [nan, inf, -inf])
 def test_review_trigger_threshold_must_be_finite(threshold: float) -> None:
-    trigger = ReviewTrigger(
-        metric="latencia_p95", operator="lte", threshold=threshold, unit="ms"
-    )
+    trigger = ReviewTrigger(metric="latencia_p95", operator="lte", threshold=threshold, unit="ms")
     draft = _proposed_draft().model_copy(update={"review_triggers": [trigger]})
 
     assert "review_triggers.threshold_finite" in _finding_codes(draft)

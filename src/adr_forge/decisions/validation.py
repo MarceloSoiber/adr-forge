@@ -30,10 +30,14 @@ def validate_adr_draft(draft: ADRDraft) -> list[ValidationFinding]:
 
     if draft.status == ADRStatus.PROPOSED:
         if not draft.decision:
-            findings.append(_error("decision.required", "/decision", "A proposed ADR requires a decision."))
+            findings.append(
+                _error("decision.required", "/decision", "A proposed ADR requires a decision.")
+            )
         if not draft.constraints:
             findings.append(
-                _error("constraints.required", "/constraints", "A proposed ADR requires a constraint.")
+                _error(
+                    "constraints.required", "/constraints", "A proposed ADR requires a constraint."
+                )
             )
         if viable_alternatives < 2:
             findings.append(
@@ -45,7 +49,9 @@ def validate_adr_draft(draft: ADRDraft) -> list[ValidationFinding]:
             )
         if not draft.rationale:
             findings.append(
-                _error("rationale.required", "/rationale", "A proposed ADR requires rationale links.")
+                _error(
+                    "rationale.required", "/rationale", "A proposed ADR requires rationale links."
+                )
             )
         if not draft.positive_consequences:
             findings.append(
@@ -74,7 +80,11 @@ def validate_adr_draft(draft: ADRDraft) -> list[ValidationFinding]:
     if draft.status == ADRStatus.PROVISIONAL:
         if not draft.assumptions:
             findings.append(
-                _error("assumptions.required", "/assumptions", "A provisional ADR requires assumptions.")
+                _error(
+                    "assumptions.required",
+                    "/assumptions",
+                    "A provisional ADR requires assumptions.",
+                )
             )
         if not 1 <= len(draft.unresolved_questions) <= 3:
             findings.append(
@@ -105,11 +115,19 @@ def validate_adr_draft(draft: ADRDraft) -> list[ValidationFinding]:
                 )
     for index, link in enumerate(draft.rationale):
         valid = (
-            link.evidence_kind == EvidenceKind.FACT
-            and link.evidence_id in {f"fact:{position}" for position, _ in enumerate(draft.facts)}
-        ) or (
-            link.evidence_kind == EvidenceKind.ASSUMPTION and link.evidence_id in assumption_ids
-        ) or (link.evidence_kind == EvidenceKind.REFERENCE and link.evidence_id in draft.reference_ids)
+            (
+                link.evidence_kind == EvidenceKind.FACT
+                and link.evidence_id
+                in {f"fact:{position}" for position, _ in enumerate(draft.facts)}
+            )
+            or (
+                link.evidence_kind == EvidenceKind.ASSUMPTION and link.evidence_id in assumption_ids
+            )
+            or (
+                link.evidence_kind == EvidenceKind.REFERENCE
+                and link.evidence_id in draft.reference_ids
+            )
+        )
         if not valid:
             findings.append(
                 _error(
