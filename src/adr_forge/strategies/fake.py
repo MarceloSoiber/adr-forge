@@ -24,6 +24,33 @@ class FakeStrategy(StructuredOutputStrategy):
         alternatives = scenario.candidate_alternatives or ["Opção A", "Opção B"]
         while len(alternatives) < 2:
             alternatives.append("Alternativa adicional")
+        facts = scenario.facts
+        assumptions = []
+        rationale = []
+        if facts:
+            rationale = [
+                {
+                    "claim": "A recomendação usa a evidência disponível.",
+                    "evidence_kind": "fact",
+                    "evidence_id": "fact:0",
+                }
+            ]
+        else:
+            assumptions = [
+                {
+                    "id": "fake-assumption",
+                    "statement": "O contexto enviado representa a necessidade inicial.",
+                    "impact": "Permite uma análise inicial revisável.",
+                    "confidence": 0.5,
+                }
+            ]
+            rationale = [
+                {
+                    "claim": "A recomendação é uma proposta inicial revisável.",
+                    "evidence_kind": "assumption",
+                    "evidence_id": "fake-assumption",
+                }
+            ]
         payload = {
             "id": str(uuid4()),
             "analysis_run_id": str(uuid4()),
@@ -31,8 +58,8 @@ class FakeStrategy(StructuredOutputStrategy):
             "title": scenario.problem[:200],
             "status": "proposed",
             "context": [scenario.problem],
-            "facts": scenario.facts,
-            "assumptions": [],
+            "facts": facts,
+            "assumptions": assumptions,
             "unresolved_questions": [],
             "constraints": scenario.constraints or ["Operação local e orçamento controlado."],
             "alternatives": [
@@ -48,7 +75,7 @@ class FakeStrategy(StructuredOutputStrategy):
                 for index, name in enumerate(alternatives[:2])
             ],
             "decision": alternatives[0],
-            "rationale": [],
+            "rationale": rationale,
             "positive_consequences": ["Mantém a decisão explícita."],
             "negative_consequences": ["Requer validação humana."],
             "risks": [],
