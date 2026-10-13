@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 from enum import StrEnum
-from typing import Annotated
+from typing import Annotated, cast
 from uuid import UUID, uuid4
 
 from pydantic import BaseModel, ConfigDict, Field, computed_field, field_validator, model_validator
@@ -31,7 +31,7 @@ def classify_categories(categories: list[DecisionCategory]) -> list[DecisionCate
         {category for category in categories if category != DecisionCategory.UNSUPPORTED},
         key=_CATEGORY_ORDER.__getitem__,
     )
-    return supported or [DecisionCategory.UNSUPPORTED]
+    return cast(list[DecisionCategory], supported or [DecisionCategory.UNSUPPORTED])
 
 
 class DecisionScenario(BaseModel):
@@ -92,7 +92,7 @@ class ScenarioRevision(BaseModel):
             )
         return self
 
-    @computed_field(return_type=str)
+    @computed_field(return_type=str)  # type: ignore[prop-decorator]
     @property
     def content_hash(self) -> str:
         return canonical_sha256(

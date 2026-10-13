@@ -35,7 +35,9 @@ def classify_supported_categories(problem: str) -> list[DecisionCategory]:
     """Classify the initial supported Portuguese decision families deterministically."""
     text = problem.casefold()
     matched: list[DecisionCategory] = []
-    if "sql" in text and ("nosql" in text or "no sql" in text):
+    if ("sql" in text and ("nosql" in text or "no sql" in text)) or (
+        "postgres" in text and "mongo" in text
+    ):
         matched.append(DecisionCategory.SQL_VS_NOSQL)
     if "síncron" in text and "assíncron" in text:
         matched.append(DecisionCategory.SYNC_VS_ASYNC)
@@ -70,7 +72,9 @@ class ScenarioService:
             constraints=command.constraints,
             desired_qualities=command.desired_qualities,
             candidate_alternatives=command.candidate_alternatives,
-            categories=classify_categories(self._classifier(command.problem)),
+            categories=classify_categories(
+                self._classifier(f"{command.problem} {' '.join(command.candidate_alternatives)}")
+            ),
         )
         await self._repository.create_first(scenario, revision)
         return scenario, revision

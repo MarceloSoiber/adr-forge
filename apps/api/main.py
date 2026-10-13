@@ -13,8 +13,10 @@ from starlette.middleware.base import RequestResponseEndpoint
 from adr_forge.api.problem_details import install_problem_details_handlers
 from adr_forge.api.routes.analysis import ProgressEvent
 from adr_forge.api.routes.analysis import router as analysis_router
+from adr_forge.api.routes.strategies import router as strategies_router
 from adr_forge.api.routes.system import router as system_router
 from adr_forge.artifacts.store import ArtifactStore
+from adr_forge.persistence.database import create_database_engine, create_session_factory
 from adr_forge.shared.config import Settings
 from adr_forge.system.resources import HostResourceProbe
 
@@ -25,12 +27,16 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @asynccontextmanager
     async def lifespan(application: FastAPI) -> AsyncIterator[None]:
         await ArtifactStore(resolved.artifact_root).reconcile_temporary()
-        yield
+        try:
+            yield
+        finally:
+            await application.state.database_engine.dispose()
 
     application = FastAPI(title="ADR Forge Local API", version="0.1.0", lifespan=lifespan)
     application.state.settings = resolved
+    application.state.database_engine = create_database_engine(resolved.database_url)
+    application.state.session_factory = create_session_factory(application.state.database_engine)
     application.state.resources = HostResourceProbe()
-    application.state.analysis_store = {"scenarios": {}, "revisions": {}, "runs": {}, "adrs": {}}
     application.add_middleware(
         CORSMiddleware,
         allow_origins=[f"http://{resolved.web_host}:{resolved.web_port}"],
@@ -49,6 +55,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     install_problem_details_handlers(application)
     application.include_router(system_router)
     application.include_router(analysis_router)
+    application.include_router(strategies_router)
 
     original_openapi = application.openapi
 

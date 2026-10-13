@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
 from dataclasses import dataclass
 from uuid import UUID
 
@@ -17,6 +18,14 @@ class ParseResult:
     draft: ADRDraft | None
     findings: list[ValidationFinding]
     parse_succeeded: bool
+
+
+@dataclass(frozen=True, slots=True)
+class ParsedOutputs:
+    """Original and (when needed) one repaired output remain independently auditable."""
+
+    original: ParseResult
+    repaired: ParseResult | None = None
 
 
 def parse_adr_output(raw_output: str, analysis_run_id: UUID) -> ParseResult:
@@ -68,3 +77,18 @@ def parse_adr_output(raw_output: str, analysis_run_id: UUID) -> ParseResult:
         )
     findings = validate_adr_draft(draft)
     return ParseResult(draft=draft, findings=findings, parse_succeeded=True)
+
+
+def parse_with_one_repair(
+    raw_output: str,
+    analysis_run_id: UUID,
+    repair: Callable[[str], str] | None = None,
+) -> ParsedOutputs:
+    """Parse original output first and perform at most one explicit repair attempt."""
+    original = parse_adr_output(raw_output, analysis_run_id)
+    if original.parse_succeeded or repair is None:
+        return ParsedOutputs(original=original)
+    return ParsedOutputs(
+        original=original,
+        repaired=parse_adr_output(repair(raw_output), analysis_run_id),
+    )

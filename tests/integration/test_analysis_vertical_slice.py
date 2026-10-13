@@ -10,6 +10,8 @@ from typing import Any
 
 import httpx
 import pytest
+from alembic import command
+from alembic.config import Config
 from apps.api.main import create_app
 
 from adr_forge.shared.config import Settings
@@ -27,8 +29,12 @@ TERMINAL_STATUSES = {
 @pytest.fixture
 async def client(tmp_path: Path) -> AsyncIterator[httpx.AsyncClient]:
     """Run the API against storage isolated from developer state."""
+    database_path = tmp_path / "adr-forge.sqlite3"
+    config = Config("alembic.ini")
+    config.set_main_option("sqlalchemy.url", f"sqlite+aiosqlite:///{database_path}")
+    await asyncio.to_thread(command.upgrade, config, "head")
     settings = Settings(
-        database_url=f"sqlite+aiosqlite:///{tmp_path / 'adr-forge.sqlite3'}",
+        database_url=f"sqlite+aiosqlite:///{database_path}",
         artifact_root=tmp_path / "artifacts",
     )
     application = create_app(settings)

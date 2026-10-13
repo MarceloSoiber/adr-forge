@@ -32,9 +32,19 @@ TERMINAL_STATUSES = frozenset(
     }
 )
 _TRANSITIONS = {
-    RunStatus.PENDING: {RunStatus.WAITING_RESOURCES, RunStatus.CANCELLED, RunStatus.FAILED},
-    RunStatus.WAITING_RESOURCES: {RunStatus.RUNNING, RunStatus.CANCELLED, RunStatus.FAILED},
-    RunStatus.RUNNING: TERMINAL_STATUSES,
+    RunStatus.PENDING: {
+        RunStatus.WAITING_RESOURCES,
+        RunStatus.CANCELLED,
+        RunStatus.FAILED,
+        RunStatus.INTERRUPTED,
+    },
+    RunStatus.WAITING_RESOURCES: {
+        RunStatus.RUNNING,
+        RunStatus.CANCELLED,
+        RunStatus.FAILED,
+        RunStatus.INTERRUPTED,
+    },
+    RunStatus.RUNNING: TERMINAL_STATUSES | {RunStatus.INTERRUPTED},
 }
 
 

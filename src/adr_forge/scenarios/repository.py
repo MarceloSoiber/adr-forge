@@ -86,6 +86,35 @@ class ScenarioRepository:
         )
         return scenario, revision
 
+    async def get_revision(self, revision_id: str) -> ScenarioRevision | None:
+        """Retrieve an immutable revision by id for starting an analysis run."""
+        async with self._session_factory() as session:
+            row = (
+                await session.execute(
+                    text(
+                        """SELECT id, scenario_id, revision_number, problem, facts_json,
+                        constraints_json, desired_qualities_json, candidate_alternatives_json,
+                        clarification_answers_json, categories_json, created_at
+                        FROM scenario_revisions WHERE id = :revision_id"""
+                    ),
+                    {"revision_id": revision_id},
+                )
+            ).mappings().one_or_none()
+        if row is None:
+            return None
+        return ScenarioRevision(
+            id=row["id"], scenario_id=row["scenario_id"], revision_number=row["revision_number"],
+            problem=row["problem"], facts=json.loads(row["facts_json"]),
+            constraints=json.loads(row["constraints_json"]),
+            desired_qualities=json.loads(row["desired_qualities_json"]),
+            candidate_alternatives=json.loads(row["candidate_alternatives_json"]),
+            clarification_answers=json.loads(row["clarification_answers_json"]),
+            categories=[
+                DecisionCategory(category) for category in json.loads(row["categories_json"])
+            ],
+            created_at=row["created_at"],
+        )
+
     async def _insert_revision(self, session: AsyncSession, revision: ScenarioRevision) -> None:
         payload = revision.model_dump(mode="json")
         payload.update(

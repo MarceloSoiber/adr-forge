@@ -2,13 +2,28 @@
 
 from __future__ import annotations
 
+import json
 from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Request
 from fastapi.responses import Response
 from pydantic import BaseModel, ConfigDict, Field
+
+from adr_forge.artifacts.repository import ArtifactRepository
+from adr_forge.artifacts.store import ArtifactStore
+from adr_forge.decisions.rendering import render_markdown
+from adr_forge.decisions.schemas import ADRDraft as DomainADRDraft
+from adr_forge.decisions.service import DecisionService
+from adr_forge.experiments.run_models import AnalysisRun as DomainAnalysisRun
+from adr_forge.experiments.run_models import RunStatus
+from adr_forge.experiments.run_repository import RunRepository
+from adr_forge.scenarios.repository import ScenarioRepository
+from adr_forge.scenarios.service import CreateScenarioInput, ScenarioService
+from adr_forge.shared.errors import ConflictError, NotFoundError
+from adr_forge.strategies.fake import FakeStrategy
+from adr_forge.system.progress import CancellationToken
 
 
 class Problem(BaseModel):
@@ -113,6 +128,31 @@ class AdrDraft(BaseModel):
 router = APIRouter(prefix="/api/v1")
 
 
+def _scenario_response(scenario: Any, revision: Any) -> dict[str, Any]:
+    return {
+        "id": scenario.id,
+        "title": scenario.title,
+        "language": scenario.language,
+        "current_revision": {
+            **revision.model_dump(mode="json"),
+            "content_hash": revision.content_hash,
+        },
+    }
+
+
+def _run_response(run: dict[str, Any]) -> dict[str, Any]:
+    return {
+        **run,
+        "id": str(run["id"]),
+        "scenario_revision_id": str(run["scenario_revision_id"]),
+        "validation_attempts": run.get("validation_attempts", []),
+    }
+
+
+async def _run_repository(request: Request) -> RunRepository:
+    return RunRepository(request.app.state.session_factory)
+
+
 @router.post(
     "/scenarios",
     response_model=ScenarioResponse,
@@ -121,35 +161,11 @@ router = APIRouter(prefix="/api/v1")
     responses={422: PROBLEM},
 )
 async def create_scenario(command: CreateScenarioRequest, request: Request) -> dict[str, Any]:
-    from hashlib import sha256
-    from uuid import uuid4
-
-    scenario_id, revision_id = uuid4(), uuid4()
-    now = datetime.now(UTC)
-    combined_text = f"{command.problem} {' '.join(command.candidate_alternatives)}".lower()
-    categories = ["sql_vs_nosql"] if any(token in combined_text for token in ("sql", "mongo")) else ["unsupported"]
-    revision = {
-        "id": revision_id,
-        "scenario_id": scenario_id,
-        "revision_number": 1,
-        "problem": command.problem,
-        "facts": command.facts,
-        "constraints": command.constraints,
-        "desired_qualities": command.desired_qualities,
-        "candidate_alternatives": command.candidate_alternatives,
-        "categories": categories,
-        "content_hash": sha256(command.problem.encode()).hexdigest(),
-        "created_at": now,
-    }
-    result = {
-        "id": scenario_id,
-        "title": command.title,
-        "language": command.language,
-        "current_revision": revision,
-    }
-    request.app.state.analysis_store["scenarios"][str(scenario_id)] = result
-    request.app.state.analysis_store["revisions"][str(revision_id)] = revision
-    return result
+    service = ScenarioService(ScenarioRepository(request.app.state.session_factory))
+    scenario, revision = await service.create(
+        CreateScenarioInput.model_validate(command.model_dump())
+    )
+    return _scenario_response(scenario, revision)
 
 
 @router.get(
@@ -159,10 +175,9 @@ async def create_scenario(command: CreateScenarioRequest, request: Request) -> d
     responses={404: PROBLEM},
 )
 async def get_scenario(scenarioId: UUID, request: Request) -> dict[str, Any]:
-    found = request.app.state.analysis_store["scenarios"].get(str(scenarioId))
-    if found is None:
-        raise HTTPException(404, "Scenario not found")
-    return found
+    service = ScenarioService(ScenarioRepository(request.app.state.session_factory))
+    scenario, revision = await service.get_current(scenarioId)
+    return _scenario_response(scenario, revision)
 
 
 @router.post(
@@ -175,60 +190,87 @@ async def get_scenario(scenarioId: UUID, request: Request) -> dict[str, Any]:
 async def create_analysis_run(
     command: CreateAnalysisRunRequest, request: Request
 ) -> dict[str, Any]:
-    from uuid import uuid4
-
-    revision = request.app.state.analysis_store["revisions"].get(str(command.scenario_revision_id))
+    scenarios = ScenarioRepository(request.app.state.session_factory)
+    revision = await scenarios.get_revision(str(command.scenario_revision_id))
     if revision is None:
-        raise HTTPException(409, "Scenario revision not found")
-    run_id, adr_id, now = uuid4(), uuid4(), datetime.now(UTC)
-    choice = (revision["candidate_alternatives"] or ["Alternativa A"])[0]
-    adr = {
-        "id": adr_id,
-        "analysis_run_id": run_id,
-        "schema_version": "adr-v1",
-        "title": f"Decisão: {choice}",
-        "status": "proposed",
-        "context": [revision["problem"]],
-        "facts": revision["facts"],
-        "assumptions": [],
-        "unresolved_questions": [],
-        "constraints": revision["constraints"] or ["Operação local"],
-        "alternatives": [],
-        "decision": choice,
-        "rationale": [],
-        "positive_consequences": ["Decisão explícita."],
-        "negative_consequences": ["Exige revisão humana."],
-        "risks": [],
-        "review_triggers": [
-            {"metric": "latencia_p95", "operator": "gt", "threshold": 500, "unit": "ms"}
-        ],
-        "confidence": 0.5,
-        "reference_ids": [],
+        raise ConflictError("Scenario revision not found")
+    repository = await _run_repository(request)
+    run = DomainAnalysisRun(
+        scenario_revision_id=revision.id,
+        strategy_id=command.strategy_id,
+        strategy_version=command.strategy_version,
+    )
+    await repository.add({**run.model_dump(mode="python"), "validation_attempts": []})
+    waiting = run.transition(
+        RunStatus.WAITING_RESOURCES, stage="aguardando recursos", progress_percent=0
+    )
+    await repository.transition(
+        {**waiting.model_dump(mode="python"), "validation_attempts": []},
+        run.progress_sequence,
+    )
+    running = waiting.transition(RunStatus.RUNNING, stage="gerando ADR", progress_percent=25)
+    await repository.transition(
+        {**running.model_dump(mode="python"), "validation_attempts": []},
+        waiting.progress_sequence,
+    )
+
+    now = datetime.now(UTC)
+    generated = await DecisionService().execute(
+        FakeStrategy(), revision, run.id, CancellationToken()
+    )
+    parsed = generated.parsed.original
+    if parsed.draft is None or any(finding.severity == "error" for finding in parsed.findings):
+        invalid = running.transition(
+            RunStatus.INVALID_OUTPUT,
+            stage="saída inválida",
+            progress_percent=100,
+            failure_code="invalid_output",
+        )
+        await repository.transition(
+            {**invalid.model_dump(mode="python"), "validation_attempts": []},
+            running.progress_sequence,
+        )
+        persisted = await repository.get(str(run.id))
+        assert persisted is not None
+        return _run_response(persisted)
+    adr = parsed.draft
+    raw_output = generated.generation.raw_output.encode("utf-8")
+    sha256, size_bytes, relative_path = await ArtifactStore(
+        request.app.state.settings.artifact_root
+    ).put_bytes(raw_output)
+    artifact_id = await ArtifactRepository(request.app.state.session_factory).create_raw_output(
+        sha256=sha256, relative_path=relative_path, size_bytes=size_bytes, created_at=now
+    )
+    await ArtifactRepository(request.app.state.session_factory).reference(
+        artifact_id, "analysis_run", run.id
+    )
+    attempt = {
+        "attempt": "original",
+        "artifact_id": artifact_id,
+        "parse_succeeded": True,
+        "findings": [],
         "created_at": now,
     }
-    run = {
-        "id": run_id,
-        "scenario_revision_id": command.scenario_revision_id,
-        "strategy_id": command.strategy_id,
-        "strategy_version": command.strategy_version,
-        "status": "completed",
-        "stage": "concluído",
-        "progress_percent": 100,
-        "progress_sequence": 2,
-        "validation_attempts": [
-            {
-                "attempt": "original",
-                "artifact_id": str(uuid4()),
-                "parse_succeeded": True,
-                "findings": [],
-            }
-        ],
-        "created_at": now,
-        "updated_at": now,
-    }
-    request.app.state.analysis_store["runs"][str(run_id)] = run
-    request.app.state.analysis_store["adrs"][str(run_id)] = adr
-    return run
+    await repository.add_validation_attempt(str(run.id), attempt)
+    completed = running.transition(
+        RunStatus.COMPLETED,
+        stage="concluído",
+        progress_percent=100,
+        adr_draft_id=adr.id,
+        input_tokens=generated.generation.telemetry.input_tokens,
+        output_tokens=generated.generation.telemetry.output_tokens,
+        latency_ms=generated.generation.telemetry.latency_ms,
+        peak_vram_mb=generated.generation.telemetry.peak_vram_mb,
+    )
+    completed_values = {**completed.model_dump(mode="python"), "validation_attempts": [attempt]}
+    if not await repository.transition(completed_values, running.progress_sequence):
+        raise ConflictError("Run changed while it was being completed")
+    await repository.save_adr(str(run.id), adr.model_dump(mode="python"))
+    persisted = await repository.get(str(run.id))
+    if persisted is None:
+        raise NotFoundError("Analysis run was not persisted")
+    persisted["validation_attempts"] = [{k: v for k, v in attempt.items() if k != "created_at"}]
+    return _run_response(persisted)
 
 
 @router.get(
@@ -238,10 +280,10 @@ async def create_analysis_run(
     responses={404: PROBLEM},
 )
 async def get_analysis_run(runId: UUID, request: Request) -> dict[str, Any]:
-    found = request.app.state.analysis_store["runs"].get(str(runId))
+    found = await (await _run_repository(request)).get(str(runId))
     if found is None:
-        raise HTTPException(404, "Run not found")
-    return found
+        raise NotFoundError("Analysis run not found")
+    return _run_response(found)
 
 
 @router.get(
@@ -253,20 +295,17 @@ async def get_analysis_run(runId: UUID, request: Request) -> dict[str, Any]:
     },
 )
 async def stream_analysis_run_events(runId: UUID, request: Request) -> Response:
-    run = await get_analysis_run(runId, request)
-    payload = {
-        "run_id": str(runId),
-        "status": run["status"],
-        "stage": run["stage"],
-        "progress_percent": run["progress_percent"],
-        "progress_sequence": run["progress_sequence"],
-        "updated_at": run["updated_at"].isoformat(),
-    }
-    import json
-
-    return Response(
-        f"event: progress\ndata: {json.dumps(payload)}\n\n", media_type="text/event-stream"
+    repository = await _run_repository(request)
+    if await repository.get(str(runId)) is None:
+        raise NotFoundError("Analysis run not found")
+    events = await repository.list_events(str(runId))
+    payload = "".join(
+        "event: progress\ndata: "
+        + json.dumps({"run_id": str(runId), **event}, default=str)
+        + "\n\n"
+        for event in events
     )
+    return Response(payload, media_type="text/event-stream")
 
 
 @router.post(
@@ -276,8 +315,28 @@ async def stream_analysis_run_events(runId: UUID, request: Request) -> Response:
     operation_id="cancelAnalysisRun",
     responses={404: PROBLEM, 409: PROBLEM},
 )
-async def cancel_analysis_run(runId: UUID) -> AnalysisRun:
-    raise NotImplementedError
+async def cancel_analysis_run(runId: UUID, request: Request) -> dict[str, Any]:
+    repository = await _run_repository(request)
+    current = await repository.get(str(runId))
+    if current is None:
+        raise NotFoundError("Analysis run not found")
+    cancellable = {RunStatus.PENDING, RunStatus.WAITING_RESOURCES, RunStatus.RUNNING}
+    if current["status"] not in {status.value for status in cancellable}:
+        raise ConflictError("Terminal analysis runs cannot be cancelled")
+    domain_values = {
+        field: current[field] for field in DomainAnalysisRun.model_fields if field in current
+    }
+    domain_run = DomainAnalysisRun.model_validate(domain_values)
+    cancelled = domain_run.transition(RunStatus.CANCELLED, stage="cancelado", progress_percent=100)
+    candidate = {
+        **cancelled.model_dump(mode="python"),
+        "validation_attempts": current["validation_attempts"],
+    }
+    if not await repository.transition(candidate, domain_run.progress_sequence):
+        raise ConflictError("Run changed while cancellation was requested")
+    persisted = await repository.get(str(runId))
+    assert persisted is not None
+    return _run_response(persisted)
 
 
 @router.get(
@@ -287,9 +346,9 @@ async def cancel_analysis_run(runId: UUID) -> AnalysisRun:
     responses={404: PROBLEM, 409: PROBLEM},
 )
 async def get_run_adr(runId: UUID, request: Request) -> dict[str, Any]:
-    found = request.app.state.analysis_store["adrs"].get(str(runId))
+    found = await (await _run_repository(request)).get_adr(str(runId))
     if found is None:
-        raise HTTPException(404, "ADR not found")
+        raise NotFoundError("ADR not found")
     return found
 
 
@@ -314,7 +373,7 @@ async def export_run_adr(runId: UUID, request: Request, format: str = "markdown"
             AdrDraft.model_validate(adr).model_dump_json(), media_type="application/json"
         )
     return Response(
-        f"# {adr['title']}\n\n## Decisão\n\n{adr['decision']}\n",
+        render_markdown(DomainADRDraft.model_validate(adr)),
         media_type="text/markdown",
         headers={"Content-Disposition": "attachment; filename=adr.md"},
     )
