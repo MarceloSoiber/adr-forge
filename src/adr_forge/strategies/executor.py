@@ -83,11 +83,7 @@ class AnalysisExecutor:
         """
         recovered = 0
         for stored in await repository.list_non_terminal():
-            fields = {
-                name: stored[name]
-                for name in AnalysisRun.model_fields
-                if name in stored
-            }
+            fields = {name: stored[name] for name in AnalysisRun.model_fields if name in stored}
             run = AnalysisRun.model_validate(fields)
             interrupted = run.transition(
                 RunStatus.INTERRUPTED,

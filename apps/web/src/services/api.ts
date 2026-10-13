@@ -32,7 +32,10 @@ export type CreateScenarioInput = {
 async function request(path: string, init?: RequestInit): Promise<Response> {
   const response = await fetch(`${apiBaseUrl}${path}`, init)
   if (!response.ok) {
-    let problem: ProblemDetail = { title: response.statusText, status: response.status }
+    let problem: ProblemDetail = {
+      title: response.statusText,
+      status: response.status,
+    }
     try {
       problem = (await response.json()) as ProblemDetail
     } catch {

@@ -65,28 +65,42 @@ class RunRepository:
     async def list_non_terminal(self) -> list[dict[str, Any]]:
         """Return runs that must be closed during application startup recovery."""
         terminal = (
-            "completed", "needs_clarification", "invalid_output", "failed",
-            "cancelled", "interrupted",
+            "completed",
+            "needs_clarification",
+            "invalid_output",
+            "failed",
+            "cancelled",
+            "interrupted",
         )
         async with self._session_factory() as session:
             rows = (
-                await session.execute(
-                    text(
-                        "SELECT * FROM analysis_runs "
-                        "WHERE status NOT IN (:completed, :needs_clarification, "
-                        ":invalid_output, :failed, :cancelled, :interrupted) "
-                        "ORDER BY created_at"
-                    ),
-                    dict(zip(
-                        (
-                            "completed", "needs_clarification", "invalid_output",
-                            "failed", "cancelled", "interrupted",
+                (
+                    await session.execute(
+                        text(
+                            "SELECT * FROM analysis_runs "
+                            "WHERE status NOT IN (:completed, :needs_clarification, "
+                            ":invalid_output, :failed, :cancelled, :interrupted) "
+                            "ORDER BY created_at"
                         ),
-                        terminal,
-                        strict=True,
-                    )),
+                        dict(
+                            zip(
+                                (
+                                    "completed",
+                                    "needs_clarification",
+                                    "invalid_output",
+                                    "failed",
+                                    "cancelled",
+                                    "interrupted",
+                                ),
+                                terminal,
+                                strict=True,
+                            )
+                        ),
+                    )
                 )
-            ).mappings().all()
+                .mappings()
+                .all()
+            )
         result = [dict(row) for row in rows]
         for run in result:
             run["validation_attempts"] = json.loads(run.pop("validation_attempts_json"))

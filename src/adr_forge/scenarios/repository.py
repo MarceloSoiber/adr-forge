@@ -90,21 +90,28 @@ class ScenarioRepository:
         """Retrieve an immutable revision by id for starting an analysis run."""
         async with self._session_factory() as session:
             row = (
-                await session.execute(
-                    text(
-                        """SELECT id, scenario_id, revision_number, problem, facts_json,
+                (
+                    await session.execute(
+                        text(
+                            """SELECT id, scenario_id, revision_number, problem, facts_json,
                         constraints_json, desired_qualities_json, candidate_alternatives_json,
                         clarification_answers_json, categories_json, created_at
                         FROM scenario_revisions WHERE id = :revision_id"""
-                    ),
-                    {"revision_id": revision_id},
+                        ),
+                        {"revision_id": revision_id},
+                    )
                 )
-            ).mappings().one_or_none()
+                .mappings()
+                .one_or_none()
+            )
         if row is None:
             return None
         return ScenarioRevision(
-            id=row["id"], scenario_id=row["scenario_id"], revision_number=row["revision_number"],
-            problem=row["problem"], facts=json.loads(row["facts_json"]),
+            id=row["id"],
+            scenario_id=row["scenario_id"],
+            revision_number=row["revision_number"],
+            problem=row["problem"],
+            facts=json.loads(row["facts_json"]),
             constraints=json.loads(row["constraints_json"]),
             desired_qualities=json.loads(row["desired_qualities_json"]),
             candidate_alternatives=json.loads(row["candidate_alternatives_json"]),

@@ -35,27 +35,46 @@ export function ScenarioForm({
     <form onSubmit={onSubmit}>
       <label>
         Título
-        <input value={title} onChange={(event) => onTitleChange(event.target.value)} />
+        <input
+          value={title}
+          onChange={(event) => onTitleChange(event.target.value)}
+        />
       </label>
       <label>
         Problema
-        <textarea value={problem} onChange={(event) => onProblemChange(event.target.value)} />
+        <textarea
+          value={problem}
+          onChange={(event) => onProblemChange(event.target.value)}
+        />
       </label>
       <label>
         Fatos
-        <textarea value={facts} onChange={(event) => onFactsChange(event.target.value)} />
+        <textarea
+          value={facts}
+          onChange={(event) => onFactsChange(event.target.value)}
+        />
       </label>
       <label>
         Restrições
-        <textarea value={constraints} onChange={(event) => onConstraintsChange(event.target.value)} />
+        <textarea
+          value={constraints}
+          onChange={(event) => onConstraintsChange(event.target.value)}
+        />
       </label>
       <label>
         Estratégia
-        <select value={strategy} onChange={(event) => onStrategyChange(event.target.value)}>
+        <select
+          value={strategy}
+          onChange={(event) => onStrategyChange(event.target.value)}
+        >
           <option value="">Selecione</option>
-          {strategies.filter((item) => item.available).map((item) => (
-            <option key={item.id} value={item.id}>{item.id}</option>
-          ))}
+          {strategies
+            .filter((item) => item.available)
+            .map((item) => (
+              <option key={item.id} value={item.id}>
+                {item.id}
+              </option>
+            ))}
         </select>
       </label>
       <button>Analisar decisão</button>

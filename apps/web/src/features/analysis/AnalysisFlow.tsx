@@ -27,7 +27,10 @@ export function AnalysisFlow() {
   const eventSource = useRef<EventSource | null>(null)
 
   useEffect(() => {
-    void analysisApi.listStrategies().then(setStrategies).catch(() => setStrategies([]))
+    void analysisApi
+      .listStrategies()
+      .then(setStrategies)
+      .catch(() => setStrategies([]))
   }, [])
   useEffect(() => () => eventSource.current?.close(), [])
 
@@ -88,7 +91,9 @@ export function AnalysisFlow() {
   async function exportMarkdown() {
     if (!run) return
     const markdown = await analysisApi.exportMarkdown(run.id)
-    const url = URL.createObjectURL(new Blob([markdown], { type: 'text/markdown' }))
+    const url = URL.createObjectURL(
+      new Blob([markdown], { type: 'text/markdown' }),
+    )
     const link = document.createElement('a')
     link.href = url
     link.download = 'adr.md'
@@ -113,7 +118,11 @@ export function AnalysisFlow() {
         onStrategyChange={setStrategy}
         onSubmit={submit}
       />
-      {error && <p><strong>{error.title}</strong> {error.detail}</p>}
+      {error && (
+        <p>
+          <strong>{error.title}</strong> {error.detail}
+        </p>
+      )}
       <RunProgress run={run} />
       <AdrView adr={adr} onExport={() => void exportMarkdown()} />
     </main>

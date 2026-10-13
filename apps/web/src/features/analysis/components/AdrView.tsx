@@ -8,14 +8,22 @@ function AdrSection({ heading, value }: { heading: string; value: unknown }) {
       <h2>{heading}</h2>
       <ul>
         {value.map((item, index) => (
-          <li key={index}>{typeof item === 'string' ? item : JSON.stringify(item)}</li>
+          <li key={index}>
+            {typeof item === 'string' ? item : JSON.stringify(item)}
+          </li>
         ))}
       </ul>
     </section>
   )
 }
 
-export function AdrView({ adr, onExport }: { adr: Adr | null; onExport: () => void }) {
+export function AdrView({
+  adr,
+  onExport,
+}: {
+  adr: Adr | null
+  onExport: () => void
+}) {
   if (!adr) return null
 
   return (
@@ -32,11 +40,19 @@ export function AdrView({ adr, onExport }: { adr: Adr | null; onExport: () => vo
         </section>
       )}
       <AdrSection heading="Racional" value={adr.rationale} />
-      <AdrSection heading="Consequências positivas" value={adr.positive_consequences} />
-      <AdrSection heading="Consequências negativas" value={adr.negative_consequences} />
+      <AdrSection
+        heading="Consequências positivas"
+        value={adr.positive_consequences}
+      />
+      <AdrSection
+        heading="Consequências negativas"
+        value={adr.negative_consequences}
+      />
       <AdrSection heading="Riscos" value={adr.risks} />
       <AdrSection heading="Gatilhos de revisão" value={adr.review_triggers} />
-      <p>A decisão final deve ser revisada e aprovada por uma pessoa responsável.</p>
+      <p>
+        A decisão final deve ser revisada e aprovada por uma pessoa responsável.
+      </p>
       <button onClick={onExport}>Exportar Markdown</button>
     </article>
   )
