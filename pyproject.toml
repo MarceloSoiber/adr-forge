@@ -70,6 +70,7 @@ mypy_path = "src"
 
 [tool.pytest.ini_options]
 addopts = "--strict-config --strict-markers --cov=adr_forge --cov-report=term-missing"
+pythonpath = ["."]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
 testpaths = ["tests"]
@@ -86,4 +87,3 @@ source = ["adr_forge"]
 show_missing = true
 skip_covered = true
 fail_under = 0
-

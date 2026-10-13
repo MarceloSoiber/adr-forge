@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
+import asyncio
+from collections.abc import AsyncIterator, Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from threading import RLock
@@ -105,3 +106,26 @@ class ProgressPublisher:
                     subscribers.pop(subscription, None)
 
         return unsubscribe
+
+    async def subscribe_async(self, run_id: str) -> AsyncIterator[ProgressSnapshot]:
+        """Yield snapshots through an async adapter suitable for SSE responses.
+
+        The callback is registered before the current snapshot is read.  This can
+        intentionally yield a duplicate at the subscription boundary, but never
+        loses a progress update while a consumer reconnects.
+        """
+        loop = asyncio.get_running_loop()
+        queue: asyncio.Queue[ProgressSnapshot] = asyncio.Queue()
+
+        def enqueue(snapshot: ProgressSnapshot) -> None:
+            loop.call_soon_threadsafe(queue.put_nowait, snapshot)
+
+        unsubscribe = self.subscribe(run_id, enqueue)
+        current = self.current(run_id)
+        if current is not None:
+            queue.put_nowait(current)
+        try:
+            while True:
+                yield await queue.get()
+        finally:
+            unsubscribe()

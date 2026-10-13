@@ -232,3 +232,139 @@ giving actionable diagnostics for unavailable optional capabilities.
   disable unrelated local features.
 - Always return ready after process startup: rejected because an invalid database or unwritable
   artifact root blocks every meaningful workflow.
+
+## Phase 3 MVP Refinements
+
+### Decision 15 — Ship a minimal strategy registry with the first vertical slice
+
+**Decision**: Phase 3 owns a small in-memory registry containing a deterministic fake strategy and
+one versioned Qwen baseline strategy. It exposes `GET /strategies` for the web picker. The baseline
+strategy owns prompt construction and structured-output instructions; the model runtime only owns
+generation. Phase 5 extends this registry with prompted, RAG, and fine-tuned availability rules.
+
+**Rationale**: The Phase 3 web flow and API contract already require strategy discovery, while a
+runtime adapter alone is not an executable analysis strategy. Keeping configuration in memory
+avoids a strategy table before mutable strategy administration is required.
+
+**Alternatives considered**:
+
+- Hard-code the baseline in the browser: rejected because it duplicates server configuration and
+  cannot report an unavailable model or fake-only test environment.
+- Defer `GET /strategies` until Phase 5: rejected because the Phase 3 vertical slice and strategy
+  picker would be incomplete.
+- Persist strategy configuration in SQLite now: rejected because Phase 3 has no authoring or
+  mutation workflow for strategies.
+
+### Decision 16 — Serialize all inference, but lease the GPU only for GPU-backed runtimes
+
+**Decision**: A single in-process queue serializes fake and real analysis jobs. GPU-backed jobs also
+perform preflight and acquire the cross-process OS lease; the fake runtime remains CPU-only and
+does neither. Blocking generation runs in a worker thread and returns a typed result containing
+text and optional telemetry. On startup, every persisted non-terminal run becomes `interrupted`
+because the in-memory queue cannot be recovered safely.
+
+**Rationale**: The fake vertical slice must run in CPU-only CI, while real inference must remain
+exclusive across API and CLI processes. Marking all orphaned non-terminal work as interrupted is
+honest and avoids silently losing queued jobs after a restart.
+
+**Alternatives considered**:
+
+- Acquire the GPU lease for the fake runtime: rejected because it makes the default tests depend
+  on local GPU configuration.
+- Re-enqueue pending records automatically: rejected because process state, cancellation intent,
+  and exact runtime availability are not durable enough for safe implicit replay.
+- Add a durable broker: rejected by the single-user local boundary and constitution.
+
+### Decision 17 — Preserve both generation attempts and their validation evidence
+
+**Decision**: Persist the original model output before parsing. If JSON or ADR validation fails,
+allow exactly one model-assisted repair using the original output, schema version, and
+machine-readable findings. Persist the repair output separately and record immutable validation
+attempt summaries for `original` and `repaired`. Never fill or rewrite missing ADR content in
+application code. A second failure terminates the run as `invalid_output` without an ADR.
+
+**Rationale**: Separate artifacts and findings make repair observable and reproducible while
+honoring the requirement to retain raw output before normalization. A one-attempt limit bounds
+latency and prevents hidden iterative prompt tuning.
+
+**Alternatives considered**:
+
+- Overwrite the original output: rejected because it destroys evidence.
+- Repair JSON locally by inventing defaults: rejected because it can silently manufacture facts or
+  architectural content.
+- Retry until valid: rejected because it is unbounded and obscures the actual model failure rate.
+
+### Decision 18 — Treat persisted run state as truth and SSE as a disposable projection
+
+**Decision**: Every material stage update is persisted before it is published. The SSE adapter
+subscribes first, then reads and emits the current persisted snapshot and discards queued events
+whose sequence is not newer; this closes the snapshot/subscription race. It then forwards
+best-effort events with a monotonic `progress_sequence` and closes after a terminal event. The
+browser reads `GET /analysis-runs/{id}` before every initial connection or reconnect and owns
+bounded reconnection; it does not rely on event replay.
+
+**Rationale**: The existing progress publisher is process-local and callback-based. Persist-first
+ordering makes refresh and reconnection correct without introducing a durable message broker.
+
+**Alternatives considered**:
+
+- Make the in-memory publisher the source of truth: rejected because events disappear on refresh
+  or process restart.
+- Add durable SSE replay now: rejected because polling the persisted snapshot closes the MVP
+  recovery requirement with much less infrastructure.
+
+### Decision 19 — Classify scenarios deterministically before hashing the revision
+
+**Decision**: Scenario creation uses an injected classifier contract. Phase 3 supplies a
+deterministic Portuguese-first classifier for the four supported categories plus `unsupported`;
+tests may inject fixed classifications. Multiple matches are the deterministic ordered list of
+specific categories, while no match is exactly `[unsupported]`. Classification is completed before
+the immutable revision hash is calculated. The hash covers normalized revision content and
+categories, excludes database identity and timestamps, preserves list order, and is unique per
+scenario.
+
+**Rationale**: Classification is part of the revision returned by `POST /scenarios` and therefore
+cannot depend on a later analysis run. Injection keeps the policy testable and replaceable without
+changing persistence or API contracts.
+
+**Alternatives considered**:
+
+- Ask the browser to choose the category: rejected because FR-003 requires the system to identify
+  one, several, or no supported categories.
+- Run a second LLM request during scenario creation: rejected because scenario persistence must
+  work without GPU and the classification result must be deterministic in default tests.
+
+### Decision 20 — Generated ADRs are proposed or provisional only
+
+**Decision**: Model-generated Phase 3 outputs may use only `proposed` or `provisional`. Statuses
+`accepted`, `rejected`, and `superseded` are reserved for a future explicit human workflow. All
+nested ADR values use closed, versioned schemas, and deterministic validation returns stable
+finding codes and paths shared by the API, CLI, benchmarks, and tests.
+
+**Rationale**: A generated draft cannot claim an organizational decision state. Closed nested
+schemas make the typed browser client and contract tests meaningful instead of accepting arbitrary
+objects.
+
+**Alternatives considered**:
+
+- Accept every lifecycle status from the model: rejected because it would imply authority the
+  product explicitly does not have.
+- Leave nested values as arbitrary JSON objects: rejected because cross-field invariants and
+  compatibility could not be verified.
+
+### Decision 21 — Mount one versioned API and normalize every validation failure
+
+**Decision**: Mount system and feature routers under `/api/v1`, matching the OpenAPI server URL.
+Convert FastAPI request validation errors and domain errors to the same RFC 9457-style problem
+shape with a stable code and request ID. Markdown exports include an attachment filename derived
+from safe local identifiers.
+
+**Rationale**: A single prefix prevents the generated client and running app from drifting. One
+error envelope lets the browser handle input, domain, and state-transition failures consistently.
+
+**Alternatives considered**:
+
+- Remove `/api/v1` from the contract: rejected because versioning is already public and additional
+  feature routes are about to land.
+- Let framework-native 422 responses pass through: rejected because they violate the published
+  problem-details contract.

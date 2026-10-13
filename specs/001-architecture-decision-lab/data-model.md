@@ -18,8 +18,11 @@ Enum values:
 - `sync_vs_async`
 - `modular_monolith_vs_microservices`
 - `containers_vs_serverless_vs_traditional`
-- `multi_category`
 - `unsupported`
+
+A scenario that matches several supported categories stores each matched category in deterministic
+enum order. A scenario that matches none stores exactly `[unsupported]`; `unsupported` cannot be
+combined with a supported value.
 
 ## DecisionScenario
 
@@ -46,17 +49,21 @@ Immutable input snapshot used by analysis runs.
 | `scenario_id` | UUID | Required foreign key |
 | `revision_number` | integer | Required, greater than or equal to 1; unique with `scenario_id` |
 | `problem` | text | Required, 20–20,000 characters |
-| `facts` | list[string] | Each item 1–2,000 characters |
-| `constraints` | list[string] | Each item 1–2,000 characters |
-| `desired_qualities` | list[string] | Each item 1–500 characters |
-| `candidate_alternatives` | list[string] | Each item 1–500 characters |
+| `facts` | list[string] | 0–50 items; each item 1–2,000 characters |
+| `constraints` | list[string] | 0–50 items; each item 1–2,000 characters |
+| `desired_qualities` | list[string] | 0–20 items; each item 1–500 characters |
+| `candidate_alternatives` | list[string] | 0–20 items; each item 1–500 characters |
 | `clarification_answers` | list[object] | Question, answer, and source run identifier |
 | `categories` | list[DecisionCategory] | At least one value after classification |
-| `content_hash` | SHA-256 | Required, unique per scenario content |
+| `content_hash` | SHA-256 | Required; unique with `scenario_id` |
 | `created_at` | timestamp | Required, immutable |
 
 Invariant: adding clarification answers creates a new revision; an existing revision is never
-edited.
+edited. Scenario classification completes before persistence. The canonical hash payload contains
+`problem`, `facts`, `constraints`, `desired_qualities`, `candidate_alternatives`,
+`clarification_answers`, and `categories`; strings are trimmed, object keys are sorted, list order
+is preserved, and database IDs, revision numbers, titles, and timestamps are excluded. The total
+UTF-8 request body is limited to 100 KiB before validation.
 
 ## AnalysisStrategy
 
@@ -112,14 +119,21 @@ Immutable execution record with controlled state transitions.
 | `status` | enum | See state machine below |
 | `stage` | string | Sanitized current progress stage |
 | `progress_percent` | integer? | 0–100 when measurable |
+| `progress_sequence` | integer | Non-negative; increases for every persisted stage snapshot |
 | `raw_output_artifact_id` | UUID? | Preserve first model output when produced |
+| `repaired_output_artifact_id` | UUID? | Preserve the single repair output when attempted |
+| `validation_attempts` | list[OutputValidationAttempt] | Immutable summaries for original and optional repair |
 | `adr_draft_id` | UUID? | Set only after valid structured output |
 | `failure_code` | string? | Stable machine-readable code |
 | `failure_detail` | string? | Sanitized, maximum 2,000 characters |
 | `input_tokens` / `output_tokens` | integer? | Non-negative |
 | `latency_ms` | integer? | Non-negative |
 | `peak_vram_mb` | integer? | Non-negative |
-| `created_at`, `started_at`, `finished_at` | timestamp | Terminal runs require `finished_at` |
+| `created_at`, `updated_at`, `started_at`, `finished_at` | timestamp | Terminal runs require `finished_at` |
+
+`OutputValidationAttempt` contains `attempt` (`original` or `repaired`), the referenced output
+artifact ID, parse success, schema version when detected, and ordered findings. Each finding has a
+stable `code`, JSON-style `path`, severity (`error` or `warning`), and sanitized message.
 
 States:
 
@@ -127,9 +141,15 @@ States:
 pending -> waiting_resources -> running
 running -> completed | needs_clarification | invalid_output | failed | cancelled | interrupted
 pending | waiting_resources -> cancelled
+pending | waiting_resources -> failed  # dispatch or resource-preflight failure
+pending | waiting_resources | running -> interrupted  # startup recovery only
 ```
 
-Terminal runs cannot transition again. Retrying creates a new run.
+Terminal runs cannot transition again. Retrying creates a new run. `completed` requires a valid
+`proposed` ADR; `needs_clarification` requires a valid `provisional` ADR with one to three
+questions; `invalid_output` requires original validation evidence, optional repair evidence, and
+no ADR. Startup converts every orphaned non-terminal run to `interrupted` because the in-memory
+executor queue is not durable.
 
 ## ADRDraft
 
@@ -141,7 +161,7 @@ Structured, schema-versioned result.
 | `analysis_run_id` | UUID | Required, unique foreign key |
 | `schema_version` | string | Required |
 | `title` | string | Required, 3–200 characters |
-| `status` | enum | `provisional`, `proposed`, `accepted`, `rejected`, `superseded` |
+| `status` | enum | Generated output is `provisional` or `proposed`; human lifecycle statuses are reserved |
 | `context` | list[string] | At least one item |
 | `facts` | list[string] | May be empty only for provisional output |
 | `assumptions` | list[object] | Statement, impact, confidence |
@@ -153,12 +173,37 @@ Structured, schema-versioned result.
 | `positive_consequences` | list[string] | At least one for conclusive output |
 | `negative_consequences` | list[string] | At least one for conclusive output |
 | `risks` | list[object] | Description, likelihood, impact, mitigation |
-| `review_triggers` | list[object] | Metric, operator, threshold, unit |
+| `review_triggers` | list[object] | At least one for conclusive output; metric, operator, threshold, unit |
 | `confidence` | decimal | 0.0–1.0 |
 | `reference_ids` | list[string] | Identifiers from retrieval snapshot |
 | `created_at` | timestamp | Required |
 
-Invariant: application validation and benchmark validation call the same evaluator functions.
+Closed nested value objects:
+
+- `Assumption`: `id`, statement, impact, and confidence from 0.0 through 1.0.
+- `UnresolvedQuestion`: `id`, question, and why/impact text; at most three.
+- `Alternative`: `id`, name, summary, viability, rejection reason when not viable, benefits,
+  drawbacks, and linked constraint identifiers.
+- `RationaleLink`: claim plus a non-empty evidence kind (`fact`, `assumption`, or `reference`) and
+  evidence identifier.
+- `Risk`: description, likelihood (`low`, `medium`, `high`), impact (`low`, `medium`, `high`), and
+  mitigation.
+- `ReviewTrigger`: metric, operator (`gt`, `gte`, `lt`, `lte`, `eq`), finite numeric threshold,
+  and unit.
+
+Invariant: application validation and benchmark validation call the same evaluator functions. A
+`proposed` ADR is conclusive and therefore requires a decision, at least one constraint, at least
+two viable alternatives, positive and negative consequences, rationale links, and at least one
+measurable review trigger. A `provisional` ADR may omit a decision only when it contains one to
+three unresolved questions and explicit assumptions. Renderers serialize only supplied validated
+content and never synthesize missing sections.
+
+Facts and constraints use stable zero-based identifiers derived from their position in the
+validated ADR: `fact:0`, `fact:1`, and `constraint:0`, for example. `RationaleLink.evidence_id`
+uses a `fact:N` identifier for fact evidence, an `Assumption.id` for assumption evidence, or a
+retrieval `reference_id` for reference evidence. `Alternative.constraint_ids` uses only existing
+`constraint:N` identifiers. Renderers preserve list order, so these identifiers are stable for the
+immutable draft.
 
 ## Experiment
 
@@ -265,7 +310,8 @@ deletion before later owner tables are introduced.
 
 ## Indexes
 
-- Scenario revision unique index on `(scenario_id, revision_number)`.
+- Scenario revision unique indexes on `(scenario_id, revision_number)` and
+  `(scenario_id, content_hash)`.
 - Run indexes on `(status, created_at)`, `experiment_id`, and `scenario_revision_id`.
 - Experiment index on `(status, created_at)`.
 - Dataset membership indexes on `(dataset_version_id, split)` and `lineage_group_id`.
