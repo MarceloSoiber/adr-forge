@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Protocol
 
 from adr_forge.retrieval.models import RetrievalSnapshot
 from adr_forge.scenarios.models import ScenarioRevision
@@ -10,8 +10,12 @@ from adr_forge.shared.hashing import canonical_sha256
 from adr_forge.strategies.base import GenerationResult, StrategyInput
 
 
+class StrategyRuntime(Protocol):
+    async def generate(self, strategy_input: StrategyInput) -> GenerationResult: ...
+
+
 class StrategyExecutionService:
-    def __init__(self, runtimes: dict[str, Any]) -> None:
+    def __init__(self, runtimes: dict[str, StrategyRuntime]) -> None:
         self._runtimes = runtimes
 
     async def execute(

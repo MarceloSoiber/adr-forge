@@ -40,6 +40,7 @@ class RetrievalService:
             retention="keep",
         )
         persisted = snapshot.model_copy(update={"artifact_id": UUID(artifact_id)})
+        stored: RetrievalSnapshot | None
         try:
             stored = await self._repository.add(persisted)
         except IntegrityError:
@@ -49,6 +50,8 @@ class RetrievalService:
             stored = await self._repository.get_by_hash(snapshot.content_hash or "")
             if stored is None:
                 raise
+        if stored is None:
+            raise ValueError("retrieval snapshot was not persisted")
         if stored.artifact_id is None:
             raise ValueError("persisted retrieval snapshot requires an artifact")
         await self._artifacts.reference(stored.artifact_id, "retrieval_snapshot", stored.id)

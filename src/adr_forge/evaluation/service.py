@@ -9,6 +9,8 @@ from pydantic import BaseModel, ConfigDict
 
 from adr_forge.evaluation.models import CandidateRun, EvaluationResult, EvaluatorType, RubricVersion
 
+LabeledCandidate = tuple[str, CandidateRun]
+
 
 class EvaluationConflict(ValueError):
     pass
@@ -55,7 +57,7 @@ class Comparison:
         self,
         candidates: list[CandidateRun],
         rubric: RubricVersion,
-        shuffler: Callable[[list[CandidateRun]], list[CandidateRun]],
+        shuffler: Callable[[list[LabeledCandidate]], list[LabeledCandidate]],
     ) -> None:
         if len(candidates) < 2 or len({item.run_id for item in candidates}) != len(candidates):
             raise ValueError("comparison requires two distinct completed runs")
@@ -70,7 +72,7 @@ class Comparison:
         ]
         self.id = uuid4()
         self.rubric = rubric
-        self._candidates = list(shuffler(labeled_candidates))
+        self._candidates: list[LabeledCandidate] = list(shuffler(labeled_candidates))
         self._history: list[EvaluationResult] = []
 
     def blinded(self) -> BlindedComparison:
@@ -87,7 +89,7 @@ class Comparison:
         cls,
         *,
         identity: UUID,
-        candidates: list[tuple[str, CandidateRun]],
+        candidates: list[LabeledCandidate],
         rubric: RubricVersion,
         history: list[EvaluationResult],
     ) -> Comparison:
@@ -156,7 +158,9 @@ class Comparison:
 
 class BlindComparisonService:
     def __init__(
-        self, *, shuffler: Callable[[list[CandidateRun]], list[CandidateRun]] = lambda value: value
+        self,
+        *,
+        shuffler: Callable[[list[LabeledCandidate]], list[LabeledCandidate]] = lambda value: value,
     ) -> None:
         self._shuffler = shuffler
 

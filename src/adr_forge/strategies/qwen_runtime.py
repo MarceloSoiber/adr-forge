@@ -5,6 +5,10 @@ from __future__ import annotations
 import asyncio
 from dataclasses import dataclass
 from time import perf_counter
+from typing import TYPE_CHECKING, cast
+
+if TYPE_CHECKING:
+    from torch import Tensor
 
 from adr_forge.scenarios.models import ScenarioRevision
 from adr_forge.strategies.base import (
@@ -34,7 +38,7 @@ class QwenRuntime(StructuredOutputStrategy):
     def _generate_blocking(self, prompt: str, cancellation: CancellationToken) -> GenerationResult:
         cancellation.raise_if_cancelled()
         try:
-            from transformers import (  # type: ignore[import-not-found]
+            from transformers import (
                 AutoModelForCausalLM,
                 AutoTokenizer,
                 StoppingCriteria,
@@ -42,7 +46,7 @@ class QwenRuntime(StructuredOutputStrategy):
             )
         except ImportError as error:
             raise RuntimeError("Qwen runtime requires the optional 'ml' dependencies.") from error
-        tokenizer = AutoTokenizer.from_pretrained(
+        tokenizer = AutoTokenizer.from_pretrained(  # type: ignore[no-untyped-call]
             QWEN_MODEL_ID, revision=self.revision, trust_remote_code=False
         )
         model = AutoModelForCausalLM.from_pretrained(
@@ -52,14 +56,17 @@ class QwenRuntime(StructuredOutputStrategy):
         cancellation.raise_if_cancelled()
         started = perf_counter()
 
-        class _CancellationStoppingCriteria(StoppingCriteria):  # type: ignore[misc]
+        class _CancellationStoppingCriteria(StoppingCriteria):
             def __call__(self, input_ids: object, scores: object, **kwargs: object) -> bool:
                 return cancellation.is_cancelled
 
-        output = model.generate(
-            **encoded,
-            max_new_tokens=self.max_new_tokens,
-            stopping_criteria=StoppingCriteriaList([_CancellationStoppingCriteria()]),
+        output = cast(
+            Tensor,
+            model.generate(
+                **encoded,
+                max_new_tokens=self.max_new_tokens,
+                stopping_criteria=StoppingCriteriaList([_CancellationStoppingCriteria()]),
+            ),
         )
         text = tokenizer.decode(output[0][encoded.input_ids.shape[1] :], skip_special_tokens=True)
         cancellation.raise_if_cancelled()

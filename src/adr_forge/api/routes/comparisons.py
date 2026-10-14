@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from typing import cast
 from uuid import UUID
 
 from fastapi import APIRouter, Request
@@ -12,6 +13,7 @@ from adr_forge.evaluation.models import CandidateRun, RubricDimension, RubricVer
 from adr_forge.evaluation.repository import EvaluationRepository
 from adr_forge.evaluation.service import (
     BlindComparisonService,
+    Comparison,
     EvaluationConflict,
     EvaluationRequired,
 )
@@ -100,7 +102,7 @@ async def submit_evaluation(
         raise ConflictError(str(error)) from error
     except ValueError as error:
         raise ValidationError(str(error)) from error
-    return result.model_dump(mode="json")
+    return cast(dict[str, object], result.model_dump(mode="json"))
 
 
 @router.get("/comparisons/{comparison_id}/reveal")
@@ -126,14 +128,14 @@ async def reveal(comparison_id: UUID, request: Request) -> dict[str, object]:
     }
 
 
-async def _comparison(identity: UUID, request: Request):
+async def _comparison(identity: UUID, request: Request) -> Comparison:
     value = await _repository(request).get_comparison(identity)
     if value is None:
         raise NotFoundError("Comparison not found.")
     return value
 
 
-def _blinded(comparison) -> dict[str, object]:
+def _blinded(comparison: Comparison) -> dict[str, object]:
     value = comparison.blinded()
     return {
         "id": comparison.id,
