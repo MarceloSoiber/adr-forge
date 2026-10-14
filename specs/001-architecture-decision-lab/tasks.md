@@ -143,17 +143,17 @@ primary output path.
 
 ### Tests first
 
-- [ ] T059 [P] [US3] Add mocked Knowledge Hub request/response, timeout, retry, auth failure, and schema failure contract tests in `tests/contract/test_knowledge_hub.py`
-- [ ] T060 [P] [US3] Add snapshot canonicalization tests proving ordered content, hashes, query, filters, scores, match reasons, and embedding identity remain immutable in `tests/unit/retrieval/test_snapshot.py`
-- [ ] T061 [P] [US3] Add strategy-equivalence tests proving RAG strategies in one comparison receive the same snapshot and generation configuration in `tests/integration/test_strategy_equivalence.py`
-- [ ] T062 [P] [US3] Add blind-comparison state tests proving identity cannot be revealed before immutable evaluation submission in `tests/unit/evaluation/test_blinding.py`
-- [ ] T063 [P] [US3] Add frontend comparison tests for randomized labels, rubric scoring, preference/tie, notes, and post-submit reveal in `apps/web/src/features/comparison/BlindComparison.test.tsx`
+- [X] T059 [P] [US3] Add mocked Knowledge Hub request/response, timeout, retry, auth failure, and schema failure contract tests in `tests/contract/test_knowledge_hub.py`
+- [X] T060 [P] [US3] Add snapshot canonicalization tests proving ordered content, hashes, query, filters, scores, match reasons, and embedding identity remain immutable in `tests/unit/retrieval/test_snapshot.py`
+- [X] T061 [P] [US3] Add strategy-equivalence tests proving RAG strategies in one comparison receive the same snapshot and generation configuration in `tests/integration/test_strategy_equivalence.py`
+- [X] T062 [P] [US3] Add blind-comparison state tests proving identity cannot be revealed before immutable evaluation submission in `tests/unit/evaluation/test_blinding.py`
+- [X] T063 [P] [US3] Add frontend comparison tests for randomized labels, rubric scoring, preference/tie, notes, and post-submit reveal in `apps/web/src/features/comparison/BlindComparison.test.tsx`
 
 ### Retrieval and strategies
 
-- [ ] T064 [P] [US3] Implement `RetrievalSnapshot` with non-empty query, validated filters, provider/embedding identity, canonical content hash, and ordered exact chunk artifact in `src/adr_forge/retrieval/models.py`
-- [ ] T065 [US3] Create retrieval snapshot table, indexes, artifact reference, and repository in `alembic/versions/0005_retrieval_snapshots.py` and `src/adr_forge/retrieval/repository.py`
-- [ ] T066 [US3] Implement the Knowledge Hub REST adapter with 2-second connect timeout, 15-second total timeout, one retry only for connection/408/429/5xx, bearer redaction, and fail-closed required fields in `src/adr_forge/retrieval/knowledge_hub.py`
+- [X] T064 [P] [US3] Implement `RetrievalSnapshot` with non-empty query, validated filters, provider/embedding identity, canonical content hash, and ordered exact chunk artifact in `src/adr_forge/retrieval/models.py`
+- [X] T065 [US3] Create retrieval snapshot table, indexes, artifact reference, and repository in `alembic/versions/0007_retrieval_snapshots.py` and `src/adr_forge/retrieval/repository.py`
+- [X] T066 [US3] Implement the Knowledge Hub REST adapter with 2-second connect timeout, 15-second total timeout, one retry only for connection/408/429/5xx, bearer redaction, and fail-closed required fields in `src/adr_forge/retrieval/knowledge_hub.py`
 - [ ] T067 [P] [US3] Implement file-backed `SnapshotRetrievalProvider` for tests, CI, and exact experiment replay in `src/adr_forge/retrieval/snapshot_provider.py`
 - [ ] T068 [US3] Implement atomic retrieval snapshot creation and reuse use cases in `src/adr_forge/retrieval/service.py`
 - [ ] T069 [P] [US3] Extend the Phase 3 baseline for comparable experiment inputs and implement the versioned structured-prompt strategy in `src/adr_forge/strategies/base.py` and `src/adr_forge/strategies/prompted.py`
@@ -166,7 +166,7 @@ primary output path.
 - [ ] T073 [US3] Create comparison/evaluation tables and repositories in `alembic/versions/0006_blind_evaluation.py` and `src/adr_forge/evaluation/repository.py`
 - [ ] T074 [US3] Implement create, retrieve-blinded, submit-once, supersede-correction, and reveal-after-submit services in `src/adr_forge/evaluation/blind_service.py`
 - [ ] T075 [US3] Implement comparison create/get/evaluate/reveal endpoints in `src/adr_forge/api/routes/comparisons.py`
-- [ ] T076 [US3] Implement the blind comparison page, rubric controls, preference, notes, and post-submit identity reveal in `apps/web/src/features/comparison/BlindComparison.tsx`
+- [X] T076 [US3] Implement the blind comparison page, rubric controls, preference, notes, and post-submit identity reveal in `apps/web/src/features/comparison/BlindComparison.tsx`
 
 **Checkpoint**: Two or more strategies are comparable without identity or retrieval-context leakage.
 

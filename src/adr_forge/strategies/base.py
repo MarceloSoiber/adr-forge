@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Protocol
+from typing import Any, Protocol
+from uuid import UUID
 
 from adr_forge.scenarios.models import ScenarioRevision
 from adr_forge.system.progress import CancellationToken
@@ -21,6 +22,17 @@ class GenerationTelemetry:
 class GenerationResult:
     raw_output: str
     telemetry: GenerationTelemetry = GenerationTelemetry()
+
+
+@dataclass(frozen=True, slots=True)
+class StrategyInput:
+    scenario_revision_id: UUID
+    scenario_content_hash: str
+    scenario: ScenarioRevision
+    snapshot: Any | None
+    retrieval_snapshot_id: UUID | None
+    prompt_version: str
+    generation_config_hash: str
 
 
 class StructuredOutputStrategy(Protocol):

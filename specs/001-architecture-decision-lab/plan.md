@@ -1,6 +1,6 @@
 # Implementation Plan: Architecture Decision Lab
 
-**Branch**: `feat/4-phase-4-clarify-context` | **Date**: 2026-10-13 | **Spec**: [spec.md](spec.md)
+**Branch**: `feat/6-phase-5-compare-modeling-strategies` | **Date**: 2026-10-14 | **Spec**: [spec.md](spec.md)
 
 **Input**: Feature specification from `specs/001-architecture-decision-lab/spec.md`
 
@@ -716,3 +716,203 @@ Phase 4 is complete only when T050–T058 and all conditions below hold together
 | Text heuristics create brittle tests | Assert structured kinds, impact, provenance, and stable findings; keep natural-language matching limited to reviewed fixtures |
 | New run hides prior evidence | Separate revision creation from run creation and retain immutable source links and prior result context |
 | Clarification breaks complete-scenario MVP | Keep US1 regression as an independent checkpoint and render the panel only for `needs_clarification` |
+
+## Phase 5 Development Plan — Modeling Strategy Comparison
+
+### Outcome and Boundary
+
+Phase 5 delivers tasks T059–T076 and closes User Story 3. A practitioner can freeze one exact
+retrieval result, execute equivalent scenario inputs through the available baseline, prompted,
+RAG, and configured fine-tuned strategy compositions, and compare two or more completed ADRs under
+randomized labels. Strategy and run identities remain undisclosed until an immutable rubric
+evaluation is committed.
+
+The required CI path is CPU-only: Knowledge Hub is mocked, retrieval can be replayed from a fixture,
+and generation uses deterministic fake runtimes. Live Knowledge Hub and GPU-backed Qwen checks are
+explicit opt-in validations. This phase does not train an adapter, run a benchmark matrix, publish a
+dataset, add authentication, or introduce a worker/broker. Fine-tuned entries may be registered but
+must report unavailable until a valid adapter artifact and compatible runtime are configured.
+
+No `NEEDS CLARIFICATION` items remain. Phase-specific decisions are recorded in
+[research.md](research.md), canonical entities and invariants in [data-model.md](data-model.md),
+HTTP and retrieval boundaries in [contracts/](contracts/), and executable evidence in
+[quickstart.md](quickstart.md).
+
+### Resolved Dependencies and Task Mapping
+
+- T065 and T073 use `0007_retrieval_snapshots.py` and `0008_blind_evaluation.py`; the filenames in
+  [tasks.md](tasks.md) are superseded because `0005` and `0006` already contain merged run-event and
+  telemetry migrations. The future experiment migration advances to the next free revision.
+- T064–T068 include a shared snapshot-creation application service and a thin
+  `POST /retrieval-snapshots` adapter so the browser/tests can create or reuse a snapshot. A CLI
+  wrapper may call the same service, but no second retrieval implementation is permitted.
+- T069–T071 also extend `AnalysisRun`, migration/repository mappings, and the run executor with
+  retrieval snapshot and generation-configuration provenance. The existing request fields cannot
+  remain ignored, and execution must resolve the registered concrete strategy instead of always
+  instantiating `FakeStrategy`.
+- T072–T075 bring forward the minimum immutable rubric model, repository, and tracked `adr-v1`
+  definition needed by User Story 3. Phase 6 extends rubric/experiment administration rather than
+  creating the first evaluable rubric.
+- T075 defines dedicated blinded and revealed DTOs. The normal `ADRDraft` response is not reused
+  before evaluation because it contains `analysis_run_id` and other provenance.
+
+### Delivery Sequence
+
+| Wave | Tasks | Deliverable | Entry dependency | Exit evidence |
+| --- | --- | --- | --- | --- |
+| 0 — Contract freeze | Supports T059–T076 | Canonical snapshot envelope, comparison eligibility, evaluation correction semantics, stable problem codes, and blinded/revealed response shapes | Phase 4 merged; OpenAPI and Knowledge Hub contracts parse | Contract examples expose no identity before submission and define every fail-closed integration case |
+| 1 — Tests first | T059–T063 | Knowledge Hub, snapshot, equivalence, blinding, and React comparison tests | Wave 0 shapes frozen | Tests fail only for missing Phase 5 behavior and require no network, model package, GPU, or live service |
+| 2 — Retrieval domain and fixture provider | T064, T067 | Frozen snapshot/chunk models, canonical serializer/hash, and file-backed provider | Wave 1 canonicalization tests present | Reordered chunks or changed request/provider/embedding metadata change the hash; identical fixtures replay byte-for-byte |
+| 3 — Retrieval persistence and live adapter | T065–T068 | Migration, repository, artifact ownership, bounded Knowledge Hub adapter, and atomic create-or-reuse service | Wave 2 models stable | Contract/integration tests prove one retry policy, 15-second wall-clock budget, token redaction, fail-closed schemas, rollback, and concurrent reuse |
+| 4 — Comparable strategy composition | T069–T071 | Common generation input, prompted/RAG/fine-tuned-RAG composition, expanded registry, and request-aware availability | Wave 3 snapshot service stable | Equivalent RAG runs receive the same snapshot ID, ordered evidence, scenario revision, and generation settings; unavailable dependencies are never silently substituted |
+| 5 — Blind evaluation domain and persistence | T072–T074 | Randomized label mapping, immutable submission/correction records, migrations, repositories, and reveal gate | Wave 4 produces completed comparable runs | Unit/integration tests prove eligibility, unpredictable labels, submit-before-reveal, duplicate conflict, explicit supersession, and immutable history |
+| 6 — HTTP and web flow | T075–T076 | Comparison create/get/evaluate/reveal routes and accessible Portuguese comparison page | Wave 5 service contract stable | OpenAPI and Vitest prove rubric scoring, preference/tie, 5,000-character notes, failure recovery, post-submit reveal, and no pre-submit identity leakage |
+| 7 — Independent US3 gate | Checkpoint | Stored fixture → one snapshot → equivalent runs → blinded evaluation → reveal | Waves 1–6 | Full CPU gate passes and all stored scenario, snapshot, run, mapping, rubric, and evaluation identities are traceable |
+
+Tasks marked `[P]` may proceed concurrently only after Wave 0 freezes their shared shapes. The
+retrieval and evaluation migrations remain serialized. Each implementation wave lands with its
+own tests; the browser is not allowed to compensate for a missing server invariant.
+
+### Retrieval Snapshot and Adapter Rules
+
+- A snapshot canonical document contains `schema_version`, provider identity/version, normalized
+  query, validated filters, embedding identity, and chunks in provider-returned rank order. Each
+  chunk contains source/chunk identity, title, URI, structured location, exact content, finite
+  score, ordered match reasons, rank, and its own content hash.
+- `created_at`, database IDs, artifact paths, and transport-only fields are excluded from the
+  canonical content hash. Query, filters, provider/embedding identity, chunk order, and every exact
+  chunk field are included. Canonical JSON uses the existing shared hashing rules.
+- The exact canonical JSON is published through the artifact store before metadata references it.
+  Metadata plus `ArtifactReference(owner_type="retrieval_snapshot")` commit atomically. A unique
+  content hash makes identical successful retrievals converge on one snapshot; a uniqueness race
+  rereads the winner instead of duplicating metadata or leaking an orphaned reference.
+- A file-backed provider validates the same closed snapshot schema as live retrieval. It never
+  repairs, reorders, or enriches fixture content, so tests and benchmark replay observe the stored
+  evidence exactly.
+- The Knowledge Hub adapter receives an injected `httpx.AsyncClient` and clock/backoff boundary.
+  One 15-second wall-clock budget covers all attempts and backoff; each connection attempt has a
+  2-second connect limit. Only connection failures, 408, 429, and 5xx may receive one retry.
+  Authentication, other 4xx, schema errors, and exhausted time fail immediately with sanitized
+  stable errors.
+- A missing required identity, location, content, embedding identity, non-finite score, duplicate
+  rank, or inconsistent echoed query fails closed. RAG strategies become unavailable for that
+  operation; non-RAG strategies remain usable. Empty or partial context is never labeled as RAG.
+
+### Comparable Strategy Rules
+
+- Extend `StructuredOutputStrategy.generate` to receive one frozen `StrategyInput` containing the
+  immutable scenario revision, optional retrieval snapshot, and one versioned generation
+  configuration. Strategies do not perform retrieval themselves.
+- The Phase 3 baseline remains backward compatible. The prompted strategy owns a separate prompt
+  version. RAG and fine-tuned-RAG share one evidence renderer that quotes chunks as untrusted
+  reference material, assigns stable reference IDs, and places evidence outside privileged
+  instructions.
+- A strategy that requires retrieval rejects a missing or unknown snapshot before a run is queued.
+  A strategy that does not use retrieval rejects an unexpected snapshot, preventing misleading
+  provenance.
+- Comparable RAG runs for one scenario revision must reference the same snapshot ID and generation
+  configuration hash. Snapshot creation is a separate explicit operation and never occurs once per
+  strategy.
+- Registry availability is derived from enabled configuration plus required runtime/model,
+  adapter artifact, retrieval provider, and request-specific snapshot checks. Stable unavailable
+  reason codes accompany localized display text. No strategy silently falls back to a baseline,
+  another model, or empty context.
+- `GET /strategies` returns the full configured projection and performs no live Knowledge Hub call.
+  Global availability reflects local configuration/runtime dependencies; snapshot ownership and
+  operational retrieval failures are validated by snapshot/run creation with stable errors.
+- Fine-tuned and fine-tuned-RAG definitions are valid compositions in this phase, but remain
+  unavailable when the adapter is absent. Phase 7 supplies the trained adapter lifecycle.
+
+### Blind Comparison and Evaluation Rules
+
+- Creation accepts two or more distinct terminal `completed` runs. Every run must belong to the
+  same immutable scenario revision, have a stored ADR, and reference a configured rubric version.
+  RAG runs in the same comparison must satisfy the shared-snapshot equivalence rule.
+- The service uses an injected cryptographically secure shuffler to assign opaque labels that do
+  not encode insertion order, strategy, run ID, or model. The label-to-run mapping is stored once
+  and never returned by create/get before a valid evaluation exists.
+- Blinded responses contain only label, ADR content, rubric, and evaluation state. They omit run,
+  strategy, model, prompt, adapter, snapshot, artifact, timing, and resource identities that could
+  reveal the source.
+- Submission validates a complete integer score for every rubric dimension and label, a preference
+  naming one label or `tie`, evaluator type, pseudonymous evaluator ID, and notes of at most 5,000
+  characters. The evaluation and comparison head update commit atomically.
+- The first submission is immutable. A repeated submission without an explicit current
+  `supersedes_evaluation_id` returns `409 evaluation_already_submitted`. A correction creates a new
+  immutable result that points to the current result; stale or cross-comparison supersession
+  returns `409`. Historical results remain queryable to application services and reports.
+- Reveal succeeds only after submission and returns the anonymous label mapped to run and strategy
+  identity plus the current evaluation ID. Before submission it returns `409
+  evaluation_required`; reads and failed submissions cannot change reveal eligibility.
+
+### Test-First Work per Wave
+
+- T059 uses `respx` and a fake clock/backoff to cover success, connect failure, 408, 429, 5xx,
+  non-retryable 4xx, auth failure, malformed JSON, missing required fields, non-finite scores,
+  deadline exhaustion, and bearer-token absence from exceptions/log capture.
+- T060 uses permutations and property tests to prove that object-key formatting is irrelevant but
+  result order, exact text, query, filters, scores, match reasons, provider, and embedding identity
+  are hash-significant. It also proves artifact bytes and stored models are not mutated on reuse.
+- T061 records the `StrategyInput` observed by fake prompted/RAG runtimes and compares scenario,
+  snapshot, evidence order, prompt/generation versions, and configuration hash rather than natural
+  language output.
+- T062 uses deterministic shufflers for assertions while production uses secure randomness. It
+  covers ineligible runs, identity-bearing field absence, incomplete scores, invalid preference,
+  duplicate submission, stale correction, cross-comparison correction, reveal-before-submit, and
+  immutable history.
+- T063/T076 test by accessible role and label in Portuguese. They cover stable randomized labels,
+  every rubric dimension, keyboard operation, preference/tie, note limits, disabled/double submit,
+  server failure without accidental reveal, correction, and identity reveal only after success.
+- Repository tests apply migrations through the new heads on temporary SQLite databases and prove
+  foreign keys, unique hashes, transaction rollback, artifact references, indexes, and immutable
+  evaluation chains.
+
+### Phase 5 Constitution Check
+
+| Principle | Phase 5 design evidence | Status |
+| --- | --- | --- |
+| Evidence Before Claims | RAG cites frozen exact chunks as untrusted evidence; empty or invalid retrieval cannot masquerade as grounded output | PASS |
+| Reproducible and Honest Experiments | Shared snapshot/configuration identity, immutable runs and evaluations, explicit correction chains, and post-submit reveal | PASS |
+| Dataset Integrity and Human Review | Phase 5 adds no training publication; reviewed fixtures remain test artifacts and human rubric judgment stays authoritative | PASS |
+| Contracts and Tests | Closed snapshot/OpenAPI schemas, stable errors, test-first waves, migration tests, equivalence proofs, and a CPU-only vertical slice | PASS |
+| Local-First Security and Resource Safety | Token redaction, bounded deadlines, loopback integration, untrusted evidence quoting, no live dependency in CI, and existing GPU lease | PASS |
+| Simplicity With Measured Evolution | Existing modular monolith, SQLite, artifact store, registry, executor, and React client are extended without a broker or new service | PASS |
+
+Post-design review found no constitutional violation. Two migrations are justified because frozen
+retrieval provenance and immutable evaluation history have different ownership and lifecycle.
+Knowledge Hub remains the existing external provider behind one adapter; no retrieval stack is
+duplicated inside ADR Forge.
+
+### Completion Gate
+
+Phase 5 is complete only when T059–T076 and all conditions below hold together:
+
+1. One mocked or fixture retrieval creates a canonical, content-addressed snapshot whose exact
+   ordered chunks can be replayed; concurrent identical creation returns one metadata identity and
+   leaves no orphaned artifact reference.
+2. Every RAG run rejects absent/mismatched retrieval and every comparable RAG run uses the same
+   scenario revision, snapshot, evidence order, and generation configuration. Missing adapters or
+   providers appear as unavailable rather than being substituted.
+3. A comparison accepts only eligible completed runs from one scenario revision. Before evaluation,
+   no API or UI representation contains strategy/run/model/snapshot identity or order leakage.
+4. A valid complete evaluation is immutable, unlocks reveal atomically, and can only be corrected
+   through an explicit one-parent supersession chain; duplicate and stale submissions remain
+   visible conflicts.
+5. The Portuguese UI supports accessible scoring, preference/tie, bounded notes, failure recovery,
+   and post-submit reveal within the published contract.
+6. OpenAPI parsing, migrations, Python formatting/lint/strict typing, unit/property/contract/
+   integration tests, frontend tests/typecheck/build, secret scanning, and the fake US3 vertical
+   slice pass CPU-only without network, model packages, GPU, or live Knowledge Hub.
+
+### Risks and Controls
+
+| Risk | Control |
+| --- | --- |
+| Knowledge Hub changes between strategy runs | Retrieve once, hash exact ordered content, and pass only the stored snapshot to strategies |
+| Retry policy exceeds the advertised timeout | Wrap all attempts and backoff in one 15-second wall-clock budget with an injected test clock |
+| Retrieved prompt injection changes privileged instructions | Render chunks as quoted untrusted evidence with stable references and no tool execution |
+| Fine-tuned strategy is selected before Phase 7 adapter exists | Request-aware availability and fail-closed adapter artifact validation |
+| Anonymous labels leak insertion order or provenance | Secure shuffle, opaque labels, dedicated blinded DTO, and forbidden identity fields in contract tests |
+| Partial rubric scores unlock reveal | Validate the complete rubric matrix and commit evaluation plus reveal eligibility atomically |
+| A correction overwrites the first judgment | Append-only superseding result with one current head and stale-parent conflict |
+| Snapshot metadata commits without durable bytes | Publish/hash artifact first, then commit metadata/reference; reconcile abandoned unreferenced bytes safely |

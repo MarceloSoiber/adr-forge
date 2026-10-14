@@ -40,6 +40,11 @@ Rules inherited from Knowledge Hub:
 {
   "query": "...",
   "limit": 8,
+  "provider_version": "knowledge-hub-search-v1",
+  "embedding": {
+    "model": "pinned-embedding-model",
+    "version": "immutable-revision"
+  },
   "results": [
     {
       "id": 42,
@@ -61,17 +66,21 @@ Rules inherited from Knowledge Hub:
 }
 ```
 
-ADR Forge ignores unknown additional fields but fails closed when a required identity, location, or
-content field is absent.
+ADR Forge ignores unknown additional fields but fails closed when a required provider, embedding,
+source/chunk identity, location, finite score, rankable result, or content field is absent. A
+deployment whose Knowledge Hub version does not return provider and embedding identity must supply
+those values through pinned, validated integration configuration; ADR Forge never guesses them.
 
 ## Timeout and Retry
 
 - Connect timeout: 2 seconds.
-- Total request timeout: 15 seconds.
+- Total wall-clock budget: 15 seconds across both attempts and their backoff.
 - Retry count: one.
 - Retry only connection failures, 408, 429, and 5xx responses.
 - Use bounded exponential backoff with jitter.
 - Never retry 400, 401, 403, 404, or schema-invalid responses.
+- Honor `Retry-After` only when it fits inside the remaining total budget; otherwise fail with a
+  sanitized timeout reason.
 
 ## Failure Behavior
 
@@ -84,9 +93,15 @@ content field is absent.
 ## Snapshot Rules
 
 One successful response is canonicalized and written as an immutable retrieval snapshot before any
-comparable strategy runs. The snapshot records request, ordered results, exact content, ranks,
-scores, source locations, match reasons, embedding identity when available, provider version,
-timestamp, and SHA-256 hashes. Every RAG-enabled run in the experiment references that snapshot.
+comparable strategy runs. The versioned canonical document records the normalized request,
+provider and embedding identity, and ordered results with exact content, ranks, finite scores,
+source locations, ordered match reasons, and per-chunk SHA-256 hashes. Every RAG-enabled run in the
+comparison cohort references that snapshot.
+
+The snapshot `content_hash` includes the canonical schema version, provider/embedding identity,
+query, filters, and every ordered chunk field. It excludes the snapshot/database ID, artifact path,
+and creation timestamp. Equal hashes must have byte-identical canonical JSON; otherwise ADR Forge
+reports an integrity failure rather than reusing the row.
 
 ## Test Contract
 
