@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import json
+from typing import Any, cast
 
 from sqlalchemy import text
+from sqlalchemy.engine import CursorResult
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
@@ -133,18 +135,21 @@ class ScenarioRepository:
             raise ValueError("revision must immediately follow the supplied scenario base")
         try:
             async with self._session_factory.begin() as session:
-                result = await session.execute(
-                    text(
-                        """UPDATE decision_scenarios SET current_revision_number = :next_revision,
-                        updated_at = :updated_at WHERE id = :scenario_id
-                        AND current_revision_number = :base_revision"""
+                result = cast(
+                    CursorResult[Any],
+                    await session.execute(
+                        text(
+                            """UPDATE decision_scenarios SET current_revision_number = :next_revision,
+                            updated_at = :updated_at WHERE id = :scenario_id
+                            AND current_revision_number = :base_revision"""
+                        ),
+                        {
+                            "scenario_id": str(scenario.id),
+                            "base_revision": base.revision_number,
+                            "next_revision": revision.revision_number,
+                            "updated_at": revision.created_at,
+                        },
                     ),
-                    {
-                        "scenario_id": str(scenario.id),
-                        "base_revision": base.revision_number,
-                        "next_revision": revision.revision_number,
-                        "updated_at": revision.created_at,
-                    },
                 )
                 if result.rowcount != 1:
                     return False
