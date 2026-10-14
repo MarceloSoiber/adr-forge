@@ -180,29 +180,29 @@ primary output path.
 
 ### Tests first
 
-- [ ] T077 [P] [US4] Add experiment lifecycle and complete/partial accounting tests in `tests/unit/experiments/test_experiment.py`
-- [ ] T078 [P] [US4] Add deterministic evaluator tests for structure, alternatives, negative consequences, review triggers, assumption labeling, references, and missing-context handling in `tests/unit/evaluation/test_deterministic.py`
+- [X] T077 [P] [US4] Add experiment lifecycle and complete/partial accounting tests in `tests/unit/experiments/test_experiment.py`
+- [X] T078 [P] [US4] Add deterministic evaluator tests for structure, alternatives, negative consequences, review triggers, assumption labeling, references, and missing-context handling in `tests/unit/evaluation/test_deterministic.py`
 - [ ] T079 [P] [US4] Add resume tests proving completed runs are immutable and only missing matrix cells are scheduled in `tests/integration/test_benchmark_resume.py`
 - [ ] T080 [P] [US4] Add report tests proving failures, exclusions, latency, resources, model/dataset/rubric/config identities, and unfavorable results are visible in `tests/integration/test_benchmark_report.py`
 - [ ] T081 [P] [US4] Add CLI contract tests for benchmark exit codes, progress streams, partial status, and JSON output in `tests/contract/test_benchmark_cli.py`
 
 ### Evaluation and experiment model
 
-- [ ] T082 [P] [US4] Implement immutable `RubricVersion` with unique name/version, SHA-256 content hash, integer score anchors, and the nine initial quality dimensions in `src/adr_forge/evaluation/rubric.py`
-- [ ] T083 [US4] Implement the shared deterministic evaluator and aggregate finding format in `src/adr_forge/evaluation/deterministic.py`
-- [ ] T084 [P] [US4] Implement `Experiment` with name 3–200 characters, frozen code/config/dataset/rubric identities, exact expected-run count, and states `draft|running|completed|partial|failed|cancelled` in `src/adr_forge/experiments/models.py`
-- [ ] T085 [US4] Create experiment/rubric tables, matrix indexes, and repositories in `alembic/versions/0007_experiments.py` and `src/adr_forge/experiments/repository.py`
-- [ ] T086 [US4] Implement experiment creation that freezes scenario revisions, strategy versions, retrieval snapshots, generation settings, rubric, dataset, and code revision in `src/adr_forge/experiments/service.py`
-- [ ] T087 [US4] Implement matrix execution, explicit failure/exclusion records, resume of missing cells, and terminal accounting in `src/adr_forge/experiments/runner.py`
-- [ ] T088 [US4] Implement report aggregation, tuned-versus-strongest-baseline comparison, SC-009 decision, and reproducibility manifest in `src/adr_forge/experiments/reporting.py`
+- [X] T082 [P] [US4] Implement immutable `RubricVersion` with unique name/version, SHA-256 content hash, integer score anchors, and the nine initial quality dimensions in `src/adr_forge/evaluation/rubric.py`
+- [X] T083 [US4] Implement the shared deterministic evaluator and aggregate finding format in `src/adr_forge/evaluation/deterministic.py`
+- [X] T084 [P] [US4] Implement `Experiment` with name 3–200 characters, frozen code/config/dataset/rubric identities, exact expected-run count, and states `draft|running|completed|partial|failed|cancelled` in `src/adr_forge/experiments/models.py`
+- [X] T085 [US4] Create experiment/rubric tables, matrix indexes, and repositories in `alembic/versions/0007_experiments.py` and `src/adr_forge/experiments/repository.py`
+- [X] T086 [US4] Implement experiment creation that freezes scenario revisions, strategy versions, retrieval snapshots, generation settings, rubric, dataset, and code revision in `src/adr_forge/experiments/service.py`
+- [X] T087 [US4] Implement matrix execution, explicit failure/exclusion records, resume of missing cells, and terminal accounting in `src/adr_forge/experiments/runner.py`
+- [X] T088 [US4] Implement report aggregation, tuned-versus-strongest-baseline comparison, SC-009 decision, and reproducibility manifest in `src/adr_forge/experiments/reporting.py`
 
 ### CLI, API, and web
 
 - [ ] T089 [US4] Implement `adr-forge benchmark run` with foreground execution, progress, resume, and complete/partial exit semantics in `src/adr_forge/cli/benchmark_run.py`
 - [ ] T090 [P] [US4] Implement `adr-forge benchmark report` with Markdown and JSON outputs in `src/adr_forge/cli/benchmark_report.py`
 - [ ] T091 [US4] Implement experiment create/get/runs/report endpoints in `src/adr_forge/api/routes/experiments.py`
-- [ ] T092 [P] [US4] Add the versioned default rubric and fake smoke benchmark configuration in `configs/evaluation/architecture-v1.yaml` and `configs/evaluation/smoke.yaml`
-- [ ] T093 [US4] Implement experiment status, per-run accounting, metrics, failures, exclusions, and report download UI in `apps/web/src/features/experiments/ExperimentReport.tsx`
+- [X] T092 [P] [US4] Add the versioned default rubric and fake smoke benchmark configuration in `configs/evaluation/architecture-v1.yaml` and `configs/evaluation/smoke.yaml`
+- [X] T093 [US4] Implement experiment status, per-run accounting, metrics, failures, exclusions, and report download UI in `apps/web/src/features/experiments/ExperimentReport.tsx`
 
 **Checkpoint**: Reproducible benchmark reports are possible before fine-tuning exists.
 

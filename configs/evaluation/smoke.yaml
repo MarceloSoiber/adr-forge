@@ -1,0 +1,59 @@
+# CPU-only benchmark used by local and CI smoke paths.  It deliberately uses
+# only the registered deterministic fake strategies and self-contained inputs.
+schema_version: benchmark-v1
+name: fake-smoke
+description: Matriz mínima determinística para validar execução, avaliação e relatório.
+language: pt-BR
+rubric:
+  path: configs/evaluation/architecture-v1.yaml
+  name: architecture
+  version: v1
+execution:
+  runtime: fake
+  resume_missing_cells: true
+  capture_resource_metrics: true
+generation:
+  temperature: 0
+  max_new_tokens: 1024
+strategies:
+  - id: fake-baseline
+    version: "1"
+  - id: prompted
+    version: "1"
+scenarios:
+  - id: smoke-complete-sql
+    title: Serviço de pedidos com consistência transacional
+    language: pt-BR
+    categories:
+      - sql_vs_nosql
+    problem: Escolher o armazenamento para pedidos que exigem consistência transacional e auditoria.
+    facts:
+      - Os pedidos precisam de trilha de auditoria por sete anos.
+      - A equipe já opera PostgreSQL.
+    constraints:
+      - Consistência transacional é obrigatória para pagamentos e estoque.
+      - O orçamento operacional não permite um novo banco gerenciado no primeiro ano.
+    desired_qualities:
+      - Integridade dos dados
+      - Auditabilidade
+    candidate_alternatives:
+      - PostgreSQL relacional
+      - Banco documental
+  - id: smoke-missing-constraints
+    title: Processamento de notificações sem restrições definidas
+    language: pt-BR
+    categories:
+      - sync_vs_async
+    problem: Escolher entre processamento síncrono e assíncrono para notificações de clientes.
+    facts:
+      - O sistema envia notificações após alterações de pedido.
+    constraints: []
+    desired_qualities:
+      - Confiabilidade
+    candidate_alternatives:
+      - Processamento síncrono
+      - Fila assíncrona
+expected_matrix:
+  scenario_count: 2
+  strategy_count: 2
+  run_count: 4

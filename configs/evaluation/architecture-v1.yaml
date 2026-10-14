@@ -1,0 +1,81 @@
+# Immutable, human-review rubric for architecture-decision ADR drafts.
+schema_version: rubric-v1
+name: architecture
+version: v1
+language: pt-BR
+score_range:
+  minimum: 1
+  maximum: 5
+dimensions:
+  - key: context_comprehension
+    description: Avalia se o ADR representa corretamente o problema e o contexto fornecidos.
+    minimum: 1
+    maximum: 5
+    anchors:
+      "1": Não representa o contexto ou contradiz fatos fornecidos.
+      "3": Representa o contexto principal, com lacunas ou simplificações relevantes.
+      "5": Representa com precisão o contexto, os fatos e os objetivos relevantes.
+  - key: constraint_identification
+    description: Avalia a identificação e o uso das restrições que orientam a decisão.
+    minimum: 1
+    maximum: 5
+    anchors:
+      "1": Ignora ou inventa restrições materiais.
+      "3": Considera parte das restrições, mas deixa trade-offs materiais sem tratamento.
+      "5": Identifica as restrições materiais e as conecta aos trade-offs da decisão.
+  - key: question_relevance
+    description: Avalia se perguntas de esclarecimento são necessárias, focadas e materiais.
+    minimum: 1
+    maximum: 5
+    anchors:
+      "1": Não identifica lacunas materiais ou faz perguntas irrelevantes.
+      "3": Identifica algumas lacunas, mas a prioridade ou o impacto não está claro.
+      "5": Faz somente perguntas focadas cujo esclarecimento pode mudar a recomendação.
+  - key: alternative_viability
+    description: Avalia se alternativas viáveis são comparadas e rejeições são justificadas.
+    minimum: 1
+    maximum: 5
+    anchors:
+      "1": Não apresenta alternativas viáveis ou as descarta sem justificativa.
+      "3": Compara alternativas, mas com cobertura ou justificativas incompletas.
+      "5": Compara alternativas genuinamente viáveis e explica seus trade-offs e rejeições.
+  - key: recommendation_coherence
+    description: Avalia a coerência entre a recomendação, as evidências e os trade-offs apresentados.
+    minimum: 1
+    maximum: 5
+    anchors:
+      "1": A recomendação contradiz o contexto ou não tem justificativa rastreável.
+      "3": A recomendação é plausível, mas parte da justificativa permanece desconectada.
+      "5": A recomendação é coerente e rastreável a fatos, pressupostos ou referências.
+  - key: cost_awareness
+    description: Avalia a consideração de custos de implementação, operação e evolução.
+    minimum: 1
+    maximum: 5
+    anchors:
+      "1": Omite custos materiais ou faz alegações de custo sem suporte.
+      "3": Reconhece custos relevantes, mas sem conectá-los completamente à decisão.
+      "5": Explicita custos e trade-offs econômicos relevantes para o cenário.
+  - key: security
+    description: Avalia a identificação de implicações de segurança e controles proporcionais.
+    minimum: 1
+    maximum: 5
+    anchors:
+      "1": Ignora riscos de segurança materiais ou recomenda controles inadequados.
+      "3": Menciona segurança, mas deixa riscos ou controles relevantes pouco específicos.
+      "5": Trata os riscos de segurança relevantes e os controles compatíveis com o contexto.
+  - key: operability
+    description: Avalia observabilidade, operação, resiliência e gatilhos de revisão da decisão.
+    minimum: 1
+    maximum: 5
+    anchors:
+      "1": Ignora impactos operacionais e não define como revisar a decisão.
+      "3": Menciona operação ou revisão, mas sem métricas ou condições suficientemente claras.
+      "5": Trata a operação e define gatilhos mensuráveis para reavaliar a decisão.
+  - key: unsupported_claims
+    description: Avalia a ausência de requisitos, fatos ou benefícios inventados sem identificação como pressuposto.
+    minimum: 1
+    maximum: 5
+    anchors:
+      "1": Faz alegações materiais sem evidência ou rotulagem de pressuposto.
+      "3": Contém poucas alegações fracas ou pressupostos parcialmente identificados.
+      "5": Distingue evidência de pressupostos e não introduz alegações materiais sem suporte.

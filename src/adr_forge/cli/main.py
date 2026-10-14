@@ -2,6 +2,8 @@
 
 import typer
 
+from adr_forge.cli.benchmark_report import benchmark_report
+from adr_forge.cli.benchmark_run import benchmark_run
 from adr_forge.cli.doctor import doctor
 
 app = typer.Typer(
@@ -17,6 +19,10 @@ def main() -> None:
 
 
 app.command()(doctor)
+benchmark = typer.Typer(help="Execute and report reproducible benchmarks.")
+benchmark.command("run")(benchmark_run)
+benchmark.command("report")(benchmark_report)
+app.add_typer(benchmark, name="benchmark")
 
 
 if __name__ == "__main__":
