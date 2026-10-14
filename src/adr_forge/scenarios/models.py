@@ -103,7 +103,9 @@ class ScenarioRevision(BaseModel):
                 "constraints": self.constraints,
                 "desired_qualities": self.desired_qualities,
                 "candidate_alternatives": self.candidate_alternatives,
-                "clarification_answers": self.clarification_answers,
+                "clarification_answers": [
+                    answer.model_dump(mode="json") for answer in self.clarification_answers
+                ],
                 "categories": self.categories,
             }
         )
