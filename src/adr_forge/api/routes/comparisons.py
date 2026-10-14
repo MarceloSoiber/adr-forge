@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 
 from adr_forge.api.routes.analysis import _run_repository
 from adr_forge.evaluation.models import CandidateRun, RubricDimension, RubricVersion
+from adr_forge.evaluation.repository import EvaluationRepository
 from adr_forge.evaluation.service import (
     BlindComparisonService,
     EvaluationConflict,
@@ -29,10 +30,8 @@ class SubmitEvaluationRequest(BaseModel):
     notes: str | None = Field(default=None, max_length=5000)
     supersedes_evaluation_id: UUID | None = None
 
-def _store(request: Request) -> dict[UUID, object]:
-    if not hasattr(request.app.state, "comparisons"):
-        request.app.state.comparisons = {}
-    return request.app.state.comparisons
+def _repository(request: Request) -> EvaluationRepository:
+    return EvaluationRepository(request.app.state.session_factory)
 
 @router.post("/comparisons", status_code=201)
 async def create_comparison(command: CreateComparisonRequest, request: Request) -> dict[str, object]:
@@ -44,27 +43,31 @@ async def create_comparison(command: CreateComparisonRequest, request: Request) 
         candidates.append(CandidateRun(run_id=run_id, scenario_revision_id=run["scenario_revision_id"], status=run["status"], adr={key: value for key, value in adr.items() if key not in {"id", "analysis_run_id", "created_at"}}, strategy_id=run["strategy_id"], strategy_version=run["strategy_version"], generation_config_hash="0" * 64))
     rubric = RubricVersion(id=command.rubric_version_id, name="local", version="1", dimensions=[RubricDimension(key="quality", description="Qualidade", minimum=1, maximum=5, anchors={"1": "fraca", "5": "forte"})])
     comparison = BlindComparisonService().create(candidates=candidates, rubric=rubric)
-    _store(request)[comparison.id] = comparison
+    await _repository(request).save_comparison(comparison)
     return _blinded(comparison)
 
 @router.get("/comparisons/{comparison_id}")
-async def get_comparison(comparison_id: UUID, request: Request) -> dict[str, object]: return _blinded(_comparison(comparison_id, request))
+async def get_comparison(comparison_id: UUID, request: Request) -> dict[str, object]:
+    return _blinded(await _comparison(comparison_id, request))
 
 @router.post("/comparisons/{comparison_id}/evaluation", status_code=201)
 async def submit_evaluation(comparison_id: UUID, command: SubmitEvaluationRequest, request: Request) -> dict[str, object]:
-    try: result = _comparison(comparison_id, request).submit(**command.model_dump())
+    try:
+        comparison = await _comparison(comparison_id, request)
+        result = comparison.submit(**command.model_dump())
+        await _repository(request).append_evaluation(result)
     except EvaluationConflict as error: raise ConflictError(str(error)) from error
     except ValueError as error: raise ValidationError(str(error)) from error
     return result.model_dump(mode="json")
 
 @router.get("/comparisons/{comparison_id}/reveal")
 async def reveal(comparison_id: UUID, request: Request) -> dict[str, object]:
-    try: value = _comparison(comparison_id, request).reveal()
+    try: value = (await _comparison(comparison_id, request)).reveal()
     except EvaluationRequired as error: raise ConflictError(str(error)) from error
-    return {"comparison_id": comparison_id, "evaluation_id": value.evaluation_id, "candidates": [{"label": chr(65 + index), "run_id": candidate.run_id, "strategy_id": candidate.strategy_id, "strategy_version": candidate.strategy_version, "retrieval_snapshot_id": candidate.retrieval_snapshot_id, "generation_config_hash": candidate.generation_config_hash} for index, candidate in enumerate(value.candidates)]}
+    return {"comparison_id": comparison_id, "evaluation_id": value.evaluation_id, "candidates": [{"label": revealed.label, "run_id": revealed.candidate.run_id, "strategy_id": revealed.candidate.strategy_id, "strategy_version": revealed.candidate.strategy_version, "retrieval_snapshot_id": revealed.candidate.retrieval_snapshot_id, "generation_config_hash": revealed.candidate.generation_config_hash} for revealed in value.candidates]}
 
-def _comparison(identity: UUID, request: Request):
-    value = _store(request).get(identity)
+async def _comparison(identity: UUID, request: Request):
+    value = await _repository(request).get_comparison(identity)
     if value is None: raise NotFoundError("Comparison not found.")
     return value
 def _blinded(comparison) -> dict[str, object]:

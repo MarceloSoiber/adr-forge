@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
+from uuid import UUID
+
 from adr_forge.shared.hashing import canonical_sha256
 from adr_forge.strategies.models import (
     AnalysisStrategy,
@@ -32,10 +35,82 @@ class StrategyRegistry:
             self._strategies.values(), key=lambda strategy: (strategy.id, strategy.version)
         )
 
+    def available_for(
+        self,
+        strategy_id: str,
+        version: str,
+        *,
+        snapshot_id: UUID | None = None,
+    ) -> StrategyAvailability:
+        """Return request-aware availability without attempting external retrieval."""
+        strategy = self.get(strategy_id, version)
+        if strategy is None:
+            return _unavailable("strategy_not_found", "Estratégia não configurada.")
+        if not strategy.enabled:
+            return _unavailable(
+                "strategy_disabled", "Estratégia desabilitada na configuração local."
+            )
+        if not strategy.availability.available:
+            return strategy.availability
+        if strategy.requires_retrieval and snapshot_id is None:
+            return _unavailable(
+                "retrieval_snapshot_required",
+                "Esta estratégia exige um snapshot de recuperação válido.",
+            )
+        if not strategy.requires_retrieval and snapshot_id is not None:
+            return _unavailable(
+                "retrieval_snapshot_not_supported",
+                "Esta estratégia não aceita snapshot de recuperação.",
+            )
+        return StrategyAvailability(available=True)
 
-def default_registry(model_revision: str = "main") -> StrategyRegistry:
-    """Return the CPU-safe fake and pinned Qwen baseline configurations."""
+
+def _unavailable(code: str, reason: str) -> StrategyAvailability:
+    return StrategyAvailability(
+        available=False, unavailable_reason=reason, unavailable_reason_code=code
+    )
+
+
+def default_registry(
+    model_revision: str = "main",
+    *,
+    retrieval_configured: bool = False,
+    adapter_artifact_id: UUID | None = None,
+    adapter_runtime_available: bool = False,
+    enabled: Iterable[str] | None = None,
+) -> StrategyRegistry:
+    """Return all configured Phase 5 strategy compositions.
+
+    This function only inspects local configuration.  It deliberately never
+    calls Knowledge Hub or imports optional ML runtimes, so strategy discovery
+    stays fast and deterministic.
+    """
     generation_config_hash = canonical_sha256({"max_new_tokens": 1024, "temperature": 0})
+    enabled_ids = set(enabled) if enabled is not None else None
+
+    def is_enabled(strategy_id: str) -> bool:
+        return enabled_ids is None or strategy_id in enabled_ids
+
+    retrieval_availability = (
+        StrategyAvailability(available=True)
+        if retrieval_configured
+        else _unavailable(
+            "retrieval_provider_unconfigured",
+            "O provedor de recuperação Knowledge Hub não está configurado.",
+        )
+    )
+    adapter_availability = (
+        StrategyAvailability(available=True)
+        if adapter_artifact_id is not None and adapter_runtime_available
+        else _unavailable(
+            "adapter_artifact_missing"
+            if adapter_artifact_id is None
+            else "adapter_runtime_unavailable",
+            "Não há um artefato de adaptador compatível configurado."
+            if adapter_artifact_id is None
+            else "O runtime do adaptador configurado não está disponível.",
+        )
+    )
     return StrategyRegistry(
         [
             AnalysisStrategy(
@@ -47,7 +122,60 @@ def default_registry(model_revision: str = "main") -> StrategyRegistry:
                 prompt_version="adr-v1",
                 generation_config_hash=generation_config_hash,
                 runtime_kind=RuntimeKind.FAKE,
+                enabled=is_enabled("fake-baseline"),
                 availability=StrategyAvailability(available=True),
+            ),
+            AnalysisStrategy(
+                id="prompted",
+                version="1",
+                kind=StrategyKind.PROMPTED,
+                model_id="adr-forge/fake",
+                model_revision="1",
+                prompt_version="adr-structured-v1",
+                generation_config_hash=generation_config_hash,
+                runtime_kind=RuntimeKind.FAKE,
+                enabled=is_enabled("prompted"),
+                availability=StrategyAvailability(available=True),
+            ),
+            AnalysisStrategy(
+                id="rag",
+                version="1",
+                kind=StrategyKind.RAG,
+                model_id="adr-forge/fake",
+                model_revision="1",
+                prompt_version="adr-rag-v1",
+                generation_config_hash=generation_config_hash,
+                requires_retrieval=True,
+                runtime_kind=RuntimeKind.FAKE,
+                enabled=is_enabled("rag"),
+                availability=retrieval_availability,
+            ),
+            AnalysisStrategy(
+                id="fine-tuned",
+                version="1",
+                kind=StrategyKind.FINE_TUNED,
+                model_id=QWEN_MODEL_ID,
+                model_revision=model_revision,
+                adapter_artifact_id=adapter_artifact_id,
+                prompt_version="adr-structured-v1",
+                generation_config_hash=generation_config_hash,
+                runtime_kind=RuntimeKind.TRANSFORMERS,
+                enabled=is_enabled("fine-tuned"),
+                availability=adapter_availability,
+            ),
+            AnalysisStrategy(
+                id="fine-tuned-rag",
+                version="1",
+                kind=StrategyKind.FINE_TUNED_RAG,
+                model_id=QWEN_MODEL_ID,
+                model_revision=model_revision,
+                adapter_artifact_id=adapter_artifact_id,
+                prompt_version="adr-rag-v1",
+                generation_config_hash=generation_config_hash,
+                requires_retrieval=True,
+                runtime_kind=RuntimeKind.TRANSFORMERS,
+                enabled=is_enabled("fine-tuned-rag"),
+                availability=adapter_availability,
             ),
             AnalysisStrategy(
                 id="qwen3-4b-baseline",
@@ -58,9 +186,10 @@ def default_registry(model_revision: str = "main") -> StrategyRegistry:
                 prompt_version="adr-v1",
                 generation_config_hash=generation_config_hash,
                 runtime_kind=RuntimeKind.TRANSFORMERS,
-                availability=StrategyAvailability(
-                    available=False,
-                    unavailable_reason="Requires optional ml dependencies and local GPU preflight.",
+                enabled=is_enabled("qwen3-4b-baseline"),
+                availability=_unavailable(
+                    "runtime_unavailable",
+                    "Dependências opcionais de ML e preflight de GPU são necessários.",
                 ),
             ),
         ]

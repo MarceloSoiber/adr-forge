@@ -62,7 +62,24 @@ class Comparison:
             candidates=[BlindedCandidate(label=label, adr=candidate.adr) for label, candidate in self._candidates],
             evaluated=bool(self._history),
         )
-    def submit(self, *, evaluator_id: str, evaluator_type: str, scores: dict[str, dict[str, int]], preference: str, supersedes_evaluation_id: UUID | None = None) -> EvaluationResult:
+    @classmethod
+    def restore(
+        cls,
+        *,
+        identity: UUID,
+        candidates: list[tuple[str, CandidateRun]],
+        rubric: RubricVersion,
+        history: list[EvaluationResult],
+    ) -> Comparison:
+        """Rehydrate a comparison without ever reassigning its blind labels."""
+        instance = cls.__new__(cls)
+        instance.id = identity
+        instance.rubric = rubric
+        instance._candidates = candidates
+        instance._history = history
+        return instance
+
+    def submit(self, *, evaluator_id: str, evaluator_type: str, scores: dict[str, dict[str, int]], preference: str, notes: str | None = None, supersedes_evaluation_id: UUID | None = None) -> EvaluationResult:
         labels = [item.label for item in self.blinded().candidates]
         dimensions = {item.key: item for item in self.rubric.dimensions}
         if set(scores) != set(labels) or any(set(value) != set(dimensions) for value in scores.values()): raise ValueError("scores must cover every label and dimension")
@@ -73,7 +90,7 @@ class Comparison:
                 if any(item.id == supersedes_evaluation_id for item in self._history): raise EvaluationConflict("stale evaluation")
                 raise EvaluationConflict("stale comparison correction parent")
         elif supersedes_evaluation_id is not None: raise EvaluationConflict("comparison has no evaluation to correct")
-        result = EvaluationResult(comparison_id=self.id, rubric_version_id=self.rubric.id, evaluator_id=evaluator_id, evaluator_type=EvaluatorType(evaluator_type), scores=scores, preference=preference, supersedes_evaluation_id=supersedes_evaluation_id)
+        result = EvaluationResult(comparison_id=self.id, rubric_version_id=self.rubric.id, evaluator_id=evaluator_id, evaluator_type=EvaluatorType(evaluator_type), scores=scores, preference=preference, notes=notes, supersedes_evaluation_id=supersedes_evaluation_id)
         self._history.append(result); return result
     def reveal(self) -> Reveal:
         if not self._history: raise EvaluationRequired("evaluation_required")

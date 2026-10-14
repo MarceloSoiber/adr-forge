@@ -28,7 +28,7 @@ class RetrievalSnapshotRepository:
     async def add(self, snapshot: RetrievalSnapshot) -> RetrievalSnapshot:
         existing = await self.get_by_hash(snapshot.content_hash or "")
         if existing is not None:
-            if existing.canonical_content != snapshot.canonical_content:
+            if existing.canonical_json_bytes() != snapshot.canonical_json_bytes():
                 raise ValueError("retrieval snapshot hash collision with different content")
             return existing
         if snapshot.artifact_id is None:
@@ -54,7 +54,8 @@ class RetrievalSnapshotRepository:
         return RetrievalSnapshot.model_validate({
             "id": row["id"], "schema_version": row["schema_version"], "provider": row["provider"],
             "provider_version": row["provider_version"],
-            "embedding": {"model": row["embedding_model"], "version": row["embedding_version"]},
+            "embedding_model": row["embedding_model"],
+            "embedding_version": row["embedding_version"],
             "query": row["query"], "filters": json.loads(row["filters_json"]),
             "chunks": json.loads(row["chunks_json"]),
             "content_hash": row["content_hash"], "artifact_id": row["artifact_id"], "created_at": row["created_at"],

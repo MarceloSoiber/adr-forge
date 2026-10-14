@@ -154,18 +154,18 @@ primary output path.
 - [X] T064 [P] [US3] Implement `RetrievalSnapshot` with non-empty query, validated filters, provider/embedding identity, canonical content hash, and ordered exact chunk artifact in `src/adr_forge/retrieval/models.py`
 - [X] T065 [US3] Create retrieval snapshot table, indexes, artifact reference, and repository in `alembic/versions/0007_retrieval_snapshots.py` and `src/adr_forge/retrieval/repository.py`
 - [X] T066 [US3] Implement the Knowledge Hub REST adapter with 2-second connect timeout, 15-second total timeout, one retry only for connection/408/429/5xx, bearer redaction, and fail-closed required fields in `src/adr_forge/retrieval/knowledge_hub.py`
-- [ ] T067 [P] [US3] Implement file-backed `SnapshotRetrievalProvider` for tests, CI, and exact experiment replay in `src/adr_forge/retrieval/snapshot_provider.py`
-- [ ] T068 [US3] Implement atomic retrieval snapshot creation and reuse use cases in `src/adr_forge/retrieval/service.py`
-- [ ] T069 [P] [US3] Extend the Phase 3 baseline for comparable experiment inputs and implement the versioned structured-prompt strategy in `src/adr_forge/strategies/base.py` and `src/adr_forge/strategies/prompted.py`
-- [ ] T070 [US3] Implement RAG and fine-tuned-RAG composition that treats chunks as quoted untrusted evidence and requires a snapshot in `src/adr_forge/strategies/rag.py`
-- [ ] T071 [US3] Extend the Phase 3 registry and `GET /strategies` behavior with missing-adapter, missing-snapshot, Knowledge Hub, RAG, and fine-tuned availability in `src/adr_forge/strategies/registry.py` and `src/adr_forge/api/routes/strategies.py`
+- [X] T067 [P] [US3] Implement file-backed `SnapshotRetrievalProvider` for tests, CI, and exact experiment replay in `src/adr_forge/retrieval/snapshot_provider.py`
+- [X] T068 [US3] Implement atomic retrieval snapshot creation and reuse use cases in `src/adr_forge/retrieval/service.py`
+- [X] T069 [P] [US3] Extend the Phase 3 baseline for comparable experiment inputs and implement the versioned structured-prompt strategy in `src/adr_forge/strategies/base.py` and `src/adr_forge/strategies/prompted.py`
+- [X] T070 [US3] Implement RAG and fine-tuned-RAG composition that treats chunks as quoted untrusted evidence and requires a snapshot in `src/adr_forge/strategies/rag.py`
+- [X] T071 [US3] Extend the Phase 3 registry and `GET /strategies` behavior with missing-adapter, missing-snapshot, Knowledge Hub, RAG, and fine-tuned availability in `src/adr_forge/strategies/registry.py` and `src/adr_forge/api/routes/strategies.py`
 
 ### Blind evaluation
 
-- [ ] T072 [P] [US3] Implement `BlindComparison` and immutable `EvaluationResult` with randomized labels, evaluator type, preference/tie, notes at most 5,000 characters, and rubric linkage in `src/adr_forge/evaluation/models.py`
-- [ ] T073 [US3] Create comparison/evaluation tables and repositories in `alembic/versions/0006_blind_evaluation.py` and `src/adr_forge/evaluation/repository.py`
-- [ ] T074 [US3] Implement create, retrieve-blinded, submit-once, supersede-correction, and reveal-after-submit services in `src/adr_forge/evaluation/blind_service.py`
-- [ ] T075 [US3] Implement comparison create/get/evaluate/reveal endpoints in `src/adr_forge/api/routes/comparisons.py`
+- [X] T072 [P] [US3] Implement `BlindComparison` and immutable `EvaluationResult` with randomized labels, evaluator type, preference/tie, notes at most 5,000 characters, and rubric linkage in `src/adr_forge/evaluation/models.py`
+- [X] T073 [US3] Create comparison/evaluation tables and repositories in `alembic/versions/0008_blind_evaluation.py` and `src/adr_forge/evaluation/repository.py`
+- [X] T074 [US3] Implement create, retrieve-blinded, submit-once, supersede-correction, and reveal-after-submit services in `src/adr_forge/evaluation/blind_service.py`
+- [X] T075 [US3] Implement comparison create/get/evaluate/reveal endpoints in `src/adr_forge/api/routes/comparisons.py`
 - [X] T076 [US3] Implement the blind comparison page, rubric controls, preference, notes, and post-submit identity reveal in `apps/web/src/features/comparison/BlindComparison.tsx`
 
 **Checkpoint**: Two or more strategies are comparable without identity or retrieval-context leakage.

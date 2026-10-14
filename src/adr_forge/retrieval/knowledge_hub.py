@@ -112,7 +112,9 @@ class KnowledgeHubProvider:
             )
         timeout = httpx.Timeout(15.0, connect=2.0)
         owns_client = self._client is None
-        client = self._client or httpx.AsyncClient(timeout=timeout)
+        client = self._client or httpx.AsyncClient(
+            base_url=str(self._settings.knowledge_hub_base_url), timeout=timeout
+        )
         started = time.monotonic()
         try:
             for attempt in range(2):
