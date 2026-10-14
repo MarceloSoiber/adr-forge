@@ -139,9 +139,10 @@ class ScenarioRepository:
                     CursorResult[Any],
                     await session.execute(
                         text(
-                            """UPDATE decision_scenarios SET current_revision_number = :next_revision,
-                            updated_at = :updated_at WHERE id = :scenario_id
-                            AND current_revision_number = :base_revision"""
+                            "UPDATE decision_scenarios SET "
+                            "current_revision_number = :next_revision, "
+                            "updated_at = :updated_at WHERE id = :scenario_id "
+                            "AND current_revision_number = :base_revision"
                         ),
                         {
                             "scenario_id": str(scenario.id),
