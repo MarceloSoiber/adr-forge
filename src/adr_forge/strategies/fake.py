@@ -123,7 +123,7 @@ class FakeStrategy(StructuredOutputStrategy):
                     "viable": True,
                     "benefits": ["Opção avaliada."],
                     "drawbacks": ["Exige revisão humana."],
-                    "constraint_ids": ["constraint:0"],
+                    "constraint_ids": ["constraint:0"] if scenario.constraints else [],
                 }
                 for index, name in enumerate(alternatives[:2])
             ],
