@@ -5,9 +5,11 @@ import {
   type Adr,
   type AnalysisRun,
   type ProblemDetail,
+  type Scenario,
   type Strategy,
 } from '../../services/api'
 import { subscribeToRunEvents } from '../../services/runEvents'
+import { ClarificationPanel } from '../clarification/ClarificationPanel'
 import { AdrView } from './components/AdrView'
 import { RunProgress } from './components/RunProgress'
 import { ScenarioForm } from './components/ScenarioForm'
@@ -23,6 +25,8 @@ export function AnalysisFlow() {
   const [strategy, setStrategy] = useState('')
   const [run, setRun] = useState<AnalysisRun | null>(null)
   const [adr, setAdr] = useState<Adr | null>(null)
+  const [scenario, setScenario] = useState<Scenario | null>(null)
+  const [showClarification, setShowClarification] = useState(true)
   const [error, setError] = useState<ProblemDetail | null>(null)
   const eventSource = useRef<EventSource | null>(null)
 
@@ -53,7 +57,7 @@ export function AnalysisFlow() {
         try {
           const next = await analysisApi.getRun(id)
           setRun(next)
-          if (next.status === 'completed') await loadAdr(id)
+          if (terminalAdrStatuses.has(next.status)) await loadAdr(id)
           subscribe(id)
         } catch {
           // The next EventSource retry remains best-effort.
@@ -74,6 +78,7 @@ export function AnalysisFlow() {
         facts: facts ? [facts] : [],
         constraints: constraints ? [constraints] : [],
       })
+      setScenario(scenario)
       const selected = strategies.find((item) => item.id === strategy)
       if (!selected) return
       const next = await analysisApi.createRun({
@@ -82,6 +87,8 @@ export function AnalysisFlow() {
         strategy_version: selected.version,
       })
       setRun(next)
+      setAdr(null)
+      setShowClarification(true)
       subscribe(next.id)
     } catch (problemDetail) {
       setError(problemDetail as ProblemDetail)
@@ -99,6 +106,40 @@ export function AnalysisFlow() {
     link.download = 'adr.md'
     link.click()
     URL.revokeObjectURL(url)
+  }
+
+  async function submitClarification(
+    answers: Array<{ question_id: string; answer: string }>,
+  ) {
+    if (!scenario || !run || !strategy) return
+    let revision
+    try {
+      revision = await analysisApi.createRevision(scenario.id, {
+        base_revision_number: scenario.current_revision.revision_number,
+        clarification_answers: answers.map((answer) => ({
+          ...answer,
+          source_run_id: run.id,
+        })),
+      })
+    } catch (reason) {
+      if ((reason as ProblemDetail).status === 409) {
+        setScenario(await analysisApi.getScenario(scenario.id))
+      }
+      throw reason
+    }
+    const selected = strategies.find((item) => item.id === strategy)
+    if (!selected) return
+    const next = await analysisApi.createRun({
+      scenario_revision_id: revision.id,
+      strategy_id: selected.id,
+      strategy_version: selected.version,
+    })
+    eventSource.current?.close()
+    setScenario({ ...scenario, current_revision: revision })
+    setAdr(null)
+    setRun(next)
+    setShowClarification(true)
+    subscribe(next.id)
   }
 
   return (
@@ -125,6 +166,16 @@ export function AnalysisFlow() {
       )}
       <RunProgress run={run} />
       <AdrView adr={adr} onExport={() => void exportMarkdown()} />
+      {showClarification &&
+        run?.status === 'needs_clarification' &&
+        adr?.status === 'provisional' &&
+        scenario && (
+          <ClarificationPanel
+            questions={adr.unresolved_questions ?? []}
+            onSubmit={submitClarification}
+            onContinue={() => setShowClarification(false)}
+          />
+        )}
     </main>
   )
 }

@@ -118,18 +118,18 @@ primary output path.
 
 ### Tests first
 
-- [ ] T050 [P] [US2] Add adverse-case tests for missing scale, contradictory cost/availability, forced technology preference, and unanswered questions in `tests/benchmark/test_clarification_cases.py`
-- [ ] T051 [P] [US2] Add scenario-revision API contract and stale-base conflict tests in `tests/contract/test_scenario_revisions_api.py`
-- [ ] T052 [P] [US2] Add frontend tests for displaying impact-aware questions, provisional continuation, and revision resubmission in `apps/web/src/features/clarification/ClarificationFlow.test.tsx`
+- [X] T050 [P] [US2] Add adverse-case tests for missing scale, contradictory cost/availability, forced technology preference, and unanswered questions in `tests/benchmark/test_clarification_cases.py`
+- [X] T051 [P] [US2] Add scenario-revision API contract and stale-base conflict tests in `tests/contract/test_scenario_revisions_api.py`
+- [X] T052 [P] [US2] Add frontend tests for displaying impact-aware questions, provisional continuation, and revision resubmission in `apps/web/src/features/clarification/ClarificationFlow.test.tsx`
 
 ### Implementation
 
-- [ ] T053 [US2] Add clarification question and answer value objects with question/answer limits and required source run linkage in `src/adr_forge/scenarios/clarification.py`
-- [ ] T054 [US2] Extend decision validation to classify missing critical context, contradictory constraints, provisional output, and confidence reduction in `src/adr_forge/decisions/validation.py`
-- [ ] T055 [US2] Implement immutable clarification-answer revision creation with optimistic base revision checks in `src/adr_forge/scenarios/service.py`
-- [ ] T056 [US2] Implement `POST /scenarios/{scenarioId}/revisions` and return HTTP 409 for stale bases in `src/adr_forge/api/routes/scenarios.py`
-- [ ] T057 [P] [US2] Add reviewed incomplete and contradictory Portuguese fixtures for all four categories in `datasets/fixtures/clarification.jsonl`
-- [ ] T058 [US2] Implement the Portuguese clarification panel, provisional action, and new-revision workflow in `apps/web/src/features/clarification/ClarificationPanel.tsx`
+- [X] T053 [US2] Add clarification question and answer value objects with question/answer limits and required source run linkage in `src/adr_forge/scenarios/clarification.py`
+- [X] T054 [US2] Extend decision validation to classify missing critical context, contradictory constraints, provisional output, and confidence reduction in `src/adr_forge/decisions/validation.py`
+- [X] T055 [US2] Implement immutable clarification-answer revision creation with optimistic base revision checks in `src/adr_forge/scenarios/service.py`
+- [X] T056 [US2] Implement `POST /scenarios/{scenarioId}/revisions` and return HTTP 409 for stale bases in `src/adr_forge/api/routes/scenarios.py`
+- [X] T057 [P] [US2] Add reviewed incomplete and contradictory Portuguese fixtures for all four categories in `datasets/fixtures/clarification.jsonl`
+- [X] T058 [US2] Implement the Portuguese clarification panel, provisional action, and new-revision workflow in `apps/web/src/features/clarification/ClarificationPanel.tsx`
 
 **Checkpoint**: US1 complete scenarios and US2 incomplete scenarios both work independently.
 

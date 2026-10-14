@@ -17,9 +17,20 @@ export type AnalysisRun = {
   failure_detail?: string
 }
 
-export type ScenarioRevision = { id: string }
-export type Scenario = { current_revision: ScenarioRevision }
-export type Adr = Record<string, unknown>
+export type ScenarioRevision = { id: string; revision_number: number }
+export type Scenario = {
+  id: string
+  current_revision: ScenarioRevision & { revision_number: number }
+}
+export type ClarificationQuestion = {
+  id: string
+  question: string
+  impact: string
+}
+export type Adr = Record<string, unknown> & {
+  status?: string
+  unresolved_questions?: ClarificationQuestion[]
+}
 
 export type CreateScenarioInput = {
   title: string
@@ -80,5 +91,27 @@ export const analysisApi = {
   },
   async exportMarkdown(id: string): Promise<string> {
     return (await request(`/analysis-runs/${id}/export?format=markdown`)).text()
+  },
+  async getScenario(id: string): Promise<Scenario> {
+    return (await (await request(`/scenarios/${id}`)).json()) as Scenario
+  },
+  async createRevision(
+    scenarioId: string,
+    input: {
+      base_revision_number: number
+      clarification_answers: Array<{
+        question_id: string
+        answer: string
+        source_run_id: string
+      }>
+    },
+  ): Promise<ScenarioRevision> {
+    return (await (
+      await request(`/scenarios/${scenarioId}/revisions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(input),
+      })
+    ).json()) as ScenarioRevision
   },
 }

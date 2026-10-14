@@ -10,6 +10,7 @@ class ErrorCode(StrEnum):
     VALIDATION = "validation_error"
     NOT_FOUND = "not_found"
     CONFLICT = "conflict"
+    STALE_REVISION = "stale_revision"
     PRECONDITION_FAILED = "precondition_failed"
     RESOURCE_UNAVAILABLE = "resource_unavailable"
     INTERNAL = "internal_error"
@@ -39,6 +40,11 @@ class NotFoundError(DomainError):
 class ConflictError(DomainError):
     def __init__(self, detail: str | None = None) -> None:
         super().__init__(ErrorCode.CONFLICT, "Conflict", 409, detail)
+
+
+class StaleRevisionError(DomainError):
+    def __init__(self, detail: str | None = None) -> None:
+        super().__init__(ErrorCode.STALE_REVISION, "Stale scenario revision", 409, detail)
 
 
 class PreconditionFailedError(DomainError):

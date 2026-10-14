@@ -1,6 +1,6 @@
 # Implementation Plan: Architecture Decision Lab
 
-**Branch**: `feat/5-phase-3-analyze-architecture-decision` | **Date**: 2026-10-12 | **Spec**: [spec.md](spec.md)
+**Branch**: `feat/4-phase-4-clarify-context` | **Date**: 2026-10-13 | **Spec**: [spec.md](spec.md)
 
 **Input**: Feature specification from `specs/001-architecture-decision-lab/spec.md`
 
@@ -556,3 +556,163 @@ Phase 3 is complete only when all T028–T049 evidence and these conditions hold
 No constitution violations or unjustified distributed components are present. Phase 3 adds one
 in-process queue, one async SSE adapter, and one in-memory strategy registry because each is needed
 by the published vertical-slice contract; none introduces a separately deployed component.
+
+## Phase 4 Development Plan — Context Clarification
+
+### Outcome and Boundary
+
+Phase 4 delivers tasks T050–T058 and closes User Story 2. An incomplete or contradictory scenario
+finishes its first run with a valid provisional ADR and no more than three impact-aware questions.
+The architect can either keep that explicitly provisional result or answer one or more questions;
+accepted answers create a new immutable scenario revision, from which a new analysis run can be
+started without changing the source revision, source run, provisional ADR, or validation evidence.
+
+The required path remains CPU-only and deterministic with the fake strategy. This phase does not
+add retrieval, multi-strategy comparison, automatic merging of free-text answers into facts or
+constraints, collaborative editing, or a human ADR lifecycle. It reuses the Phase 3 queue, run
+state machine, artifact catalog, RFC 9457 errors, and `/api/v1` boundary. No database migration is
+required because `scenario_revisions.clarification_answers_json` and the scenario head pointer
+already exist.
+
+No `NEEDS CLARIFICATION` items remain. Phase-specific decisions are recorded in
+[research.md](research.md), value objects and invariants in [data-model.md](data-model.md), the
+revision command in [contracts/api.openapi.yaml](contracts/api.openapi.yaml), and executable
+acceptance evidence in [quickstart.md](quickstart.md).
+
+### Delivery Sequence
+
+| Wave | Tasks | Deliverable | Entry dependency | Exit evidence |
+| --- | --- | --- | --- | --- |
+| 0 — Contract freeze | Supports T051, T053, T056, T058 | Authoritative question IDs, source-run linkage, closed answer schema, `stale_revision` problem, and revision response shape | Phase 3 merged and OpenAPI parses | Contract examples distinguish 404, 409, and 422; generated and handwritten clients agree on fields |
+| 1 — Tests first | T050–T052 | Adversarial benchmark fixtures, stale-base API tests, and clarification UI tests | Wave 0 response shapes frozen | Tests fail only for missing Phase 4 behavior and cover every US2 acceptance scenario |
+| 2 — Domain policy | T053–T055 | Frozen clarification value objects, deterministic provisional rules, fake/prompt behavior, terminal-state mapping, source-run validation, and compare-and-swap revision service | Wave 1 tests present | Unit/property tests prove limits, ownership, immutability, confidence ceiling, no invented defaults, correct terminal state, duplicate rejection, and one-winner concurrency |
+| 3 — Persistence and HTTP | T055–T056 | Atomic revision append and `POST /scenarios/{scenarioId}/revisions` | Wave 2 policy stable | Repository/contract tests prove inherited content, monotonic revision numbers, rollback, `409 stale_revision`, and unchanged prior evidence |
+| 4 — Portuguese evidence and UI | T057–T058 | Reviewed JSONL cases and an accessible clarification panel integrated into `AnalysisFlow` | Wave 3 endpoint stable | Four categories cover missing and contradictory context; Vitest proves answer/resubmit and provisional paths |
+| 5 — Independent vertical-slice gate | Checkpoint | Complete US1 path plus incomplete US2 path using the fake strategy | Waves 1–4 | CPU gate passes; answering creates revision N+1 and a new run while revision N, its run, and ADR remain byte-stable |
+
+Tasks T050–T052 are authored before their corresponding implementation. T050, T051, T052, and
+T057 may proceed in parallel after Wave 0 because they own separate test or fixture files. Domain,
+repository, route, and UI implementation remain ordered so no layer is built against a provisional
+command shape.
+
+### Clarification and Validation Rules
+
+- A clarification question is identified by its immutable ADR question ID and belongs to exactly
+  one terminal source run. The server resolves the question text and impact from the stored ADR;
+  client-supplied prose is never treated as authoritative evidence.
+- A clarification answer contains `question_id`, non-blank `answer`, and `source_run_id`. A request
+  contains one to three answers with unique question IDs. Every source run must belong to the base
+  revision, be in `needs_clarification`, have a stored provisional ADR, and expose the referenced
+  unresolved question.
+- A provisional ADR contains one to three unique, impact-aware unresolved questions, at least one
+  explicit assumption, no unsupported conclusive decision, and confidence no greater than `0.60`.
+  Missing critical context produces `context.missing_critical`, contradictory constraints produce
+  `context.contradictory_constraints`, excessive provisional confidence produces
+  `confidence.provisional_too_high`, and a forced technology preference produces the warning
+  `context.forced_preference`. The preference is evidence to challenge, not an accepted decision.
+- Strategy prompts and the deterministic fake do not manufacture a fallback constraint to make an
+  incomplete scenario look complete. A structurally valid `provisional` draft maps the run to
+  `needs_clarification`; only a valid `proposed` draft maps it to `completed`.
+- Choosing not to answer does not create or mutate anything. The existing provisional ADR remains
+  reviewable and exportable with its assumptions, questions, and reduced confidence visible.
+- Answers are appended as immutable snapshots containing the authoritative question text and
+  impact. The new revision inherits the base problem, facts, constraints, desired qualities,
+  alternatives, and category order; the strategy receives the appended answers as additional
+  user evidence on the next run.
+
+### Optimistic Revision Transaction
+
+1. Load the scenario, requested base revision, source runs, and source ADRs; validate ownership,
+   terminal state, question IDs, limits, and request size before opening a write transaction.
+2. Construct revision `base_revision_number + 1`, append normalized answers, and calculate the
+   canonical content hash without changing the base object.
+3. In one short transaction, conditionally advance `decision_scenarios.current_revision_number`
+   only when it still equals `base_revision_number`, then insert the new revision. A zero-row
+   compare-and-swap raises `409` with code `stale_revision`; any insert failure rolls back the head
+   update.
+4. Return the committed revision. Starting its analysis is a separate existing command, so an
+   enqueue failure cannot roll back or obscure the architect's answers.
+5. Concurrent requests against the same base have exactly one winner. Retrying the losing request
+   requires reading the current scenario and deliberately rebasing; the service never merges
+   answers silently.
+
+### API and Web Flow
+
+- `POST /api/v1/scenarios/{scenarioId}/revisions` accepts the base revision number and one to three
+  answer references. It returns `201` with the immutable revision, `404` for unknown scenario/run,
+  `409 stale_revision` for an outdated head, and `422` for ownership, state, question, duplicate,
+  or limit violations.
+- `ScenarioRevision` responses expose the stored clarification-answer snapshots so clients and
+  tests can verify provenance. Existing scenario and run endpoints remain unchanged.
+- `AnalysisFlow` renders `ClarificationPanel` whenever a terminal `needs_clarification` run has a
+  provisional ADR. The panel labels why each answer matters, permits one to three selected
+  answers, announces validation/errors accessibly, and keeps the explicit action to continue with
+  the provisional ADR.
+- On successful revision creation, the browser starts a new run with the same selected strategy
+  and its current version, replaces the active subscription safely, and retains navigation context
+  for the previous provisional result. A `409` refreshes the current scenario and preserves typed
+  answers for deliberate resubmission; it never auto-rebases.
+
+### Test-First Work per Wave
+
+- T050 uses reviewed pt-BR inputs for missing scale, cost-versus-availability conflict, forced
+  technology preference, and unanswered questions. Assertions target structured question count,
+  impact, status, assumptions, and confidence rather than brittle full prose.
+- T051 posts valid, duplicate, cross-scenario, non-terminal-source, unknown-question, oversized,
+  and stale-base requests. A two-writer test proves one `201` and one `409`, and rereads every old
+  revision/run/ADR to prove immutability.
+- T052 mocks the typed API and run-event boundary. It covers question impact rendering, keyboard
+  and label accessibility, partial answers, client validation, provisional continuation, new-run
+  subscription cleanup, `409` preservation, and non-Phase-4 US1 regression.
+- Property tests generate one to three unique answers and invalid zero, four, duplicate, blank,
+  mismatched-run, and mismatched-scenario cases. Stable finding/error codes are asserted instead of
+  localized messages.
+- T057 fixtures include both missing and contradictory cases across all four categories, authored
+  in Brazilian Portuguese with `id`, category, input, expected issue kind, expected impact area,
+  review status, and reviewer note. They contain no production, personal, payment, or confidential
+  data and are not promoted into a published dataset by this phase.
+
+### Phase 4 Constitution Check
+
+| Principle | Phase 4 design evidence | Status |
+| --- | --- | --- |
+| Evidence Before Claims | Authoritative source-run questions, provisional status, explicit assumptions, impact, reduced confidence, and no silent conversion of answers into facts | PASS |
+| Reproducible and Honest Experiments | Source revision/run linkage and immutable old runs, ADRs, outputs, validation findings, and answer snapshots | PASS |
+| Dataset Integrity and Human Review | Reviewed synthetic pt-BR fixtures remain test evidence and are not silently promoted to training data | PASS |
+| Contracts and Tests | OpenAPI-first command, stable errors/findings, tests before implementation, CAS concurrency proof, and independent US1/US2 gates | PASS |
+| Local-First Security and Resource Safety | CPU-only fake path, bounded bodies and answer counts, no new external service, and no client-authoritative evidence | PASS |
+| Simplicity With Measured Evolution | Existing SQLite JSON column, repository, queue, routes, and React flow are extended without a broker, new service, or migration | PASS |
+
+Post-design review found no constitutional violation. A dedicated clarification value-object module
+is justified by provenance and validation rules shared by persistence, API, prompts, and tests; it
+does not introduce a new runtime component.
+
+### Completion Gate
+
+Phase 4 is complete only when T050–T058 and all conditions below hold together:
+
+1. Incomplete and contradictory pt-BR scenarios yield a valid provisional ADR with one to three
+   relevant questions, explicit assumptions, and confidence at or below `0.60`; complete Phase 3
+   scenarios still complete without entering clarification.
+2. Valid answers create exactly one new immutable revision whose provenance points to the source
+   run and question. The base revision, source run, ADR, raw outputs, and findings remain unchanged.
+3. Stale concurrent writers produce one success and one `409 stale_revision`; invalid ownership,
+   state, question IDs, duplicates, limits, and request sizes cannot advance the scenario head.
+4. The browser can show why each question matters, continue with the provisional result, submit
+   answers, start the next run, recover from a stale base without losing input, and close the prior
+   EventSource before subscribing again.
+5. OpenAPI parsing, Python formatting/lint/type checks, unit/property/contract/benchmark tests,
+   frontend tests/typecheck/build, secret scanning, and the fake US1/US2 vertical slices pass
+   CPU-only without network, model packages, GPU, or Knowledge Hub.
+
+### Risks and Controls
+
+| Risk | Control |
+| --- | --- |
+| Client changes question prose or answers a question from another run | Accept IDs, resolve authoritative snapshots server-side, and verify run/revision/scenario ownership |
+| Two tabs overwrite the current revision | Atomic compare-and-swap on the scenario head and a stable `409 stale_revision` response |
+| Answer prose is silently promoted to fact | Preserve it as a clarification answer; only a later explicit user edit may change facts or constraints |
+| Provisional output appears conclusive | Enforce question/assumption requirements, confidence ceiling, visible status, and provisional UI action |
+| Text heuristics create brittle tests | Assert structured kinds, impact, provenance, and stable findings; keep natural-language matching limited to reviewed fixtures |
+| New run hides prior evidence | Separate revision creation from run creation and retain immutable source links and prior result context |
+| Clarification breaks complete-scenario MVP | Keep US1 regression as an independent checkpoint and render the panel only for `needs_clarification` |

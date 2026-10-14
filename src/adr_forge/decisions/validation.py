@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from typing import Literal
 
 from adr_forge.decisions.schemas import ADRDraft, ADRStatus, EvidenceKind
+from adr_forge.scenarios.models import ScenarioRevision
 
 
 @dataclass(frozen=True, slots=True)
@@ -86,6 +87,23 @@ def validate_adr_draft(draft: ADRDraft) -> list[ValidationFinding]:
                     "A provisional ADR requires assumptions.",
                 )
             )
+        if draft.confidence > 0.60:
+            findings.append(
+                _error(
+                    "confidence.provisional_too_high",
+                    "/confidence",
+                    "A provisional ADR must not exceed 0.60 confidence.",
+                )
+            )
+        question_ids = [question.id for question in draft.unresolved_questions]
+        if len(question_ids) != len(set(question_ids)):
+            findings.append(
+                _error(
+                    "questions.duplicate_id",
+                    "/unresolved_questions",
+                    "A provisional ADR must use unique question IDs.",
+                )
+            )
         if not 1 <= len(draft.unresolved_questions) <= 3:
             findings.append(
                 _error(
@@ -145,4 +163,38 @@ def validate_adr_draft(draft: ADRDraft) -> list[ValidationFinding]:
                     "Review trigger threshold must be finite.",
                 )
             )
+    return findings
+
+
+def classify_context(scenario: ScenarioRevision) -> list[ValidationFinding]:
+    """Identify context that requires an explicitly provisional analysis."""
+    findings: list[ValidationFinding] = []
+    if not scenario.facts or not scenario.constraints:
+        findings.append(
+            _error(
+                "context.missing_critical",
+                "/",
+                "Critical facts or constraints are missing for a conclusive recommendation.",
+            )
+        )
+    joined = " ".join([scenario.problem, *scenario.constraints]).casefold()
+    if ("baixo custo" in joined or "sem custo" in joined) and (
+        "alta disponibilidade" in joined or "disponibilidade 24" in joined
+    ):
+        findings.append(
+            _error(
+                "context.contradictory_constraints",
+                "/constraints",
+                "Cost and availability constraints require clarification.",
+            )
+        )
+    if any(token in joined for token in ("obrigatoriamente usar", "deve usar", "forçado")):
+        findings.append(
+            ValidationFinding(
+                code="context.forced_preference",
+                path="/",
+                severity="warning",
+                message="A stated technology preference is evidence to challenge, not a decision.",
+            )
+        )
     return findings

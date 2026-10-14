@@ -107,12 +107,32 @@ model packages.
 
 ## Validate clarification behavior
 
-Submit the intentionally incomplete fixture from `datasets/fixtures`. Expected result:
+Run the Phase 4 CPU-safe suites:
 
-- no more than three focused questions;
-- no unsupported conclusive recommendation;
-- a new scenario revision after answers;
-- the original run and revision remain unchanged.
+```bash
+uv run pytest \
+  tests/benchmark/test_clarification_cases.py \
+  tests/contract/test_scenario_revisions_api.py
+
+npm --prefix apps/web test -- ClarificationFlow.test.tsx
+```
+
+Then start the local application and submit one incomplete pt-BR case from
+`datasets/fixtures/clarification.jsonl`. Verify both branches of the interaction:
+
+1. Choose **Continuar como provisório** and confirm that no revision or run is created and the
+   existing ADR remains visibly provisional and exportable.
+2. Answer one or more displayed questions and submit. Confirm that revision `N + 1` is created,
+   a new run starts from it, and the source revision/run/ADR can still be fetched unchanged.
+
+Expected result:
+
+- no more than three focused questions, each explaining why the answer matters;
+- a provisional ADR with explicit assumptions and confidence at or below `0.60`;
+- a new scenario revision after valid answers, with authoritative question and source-run linkage;
+- the original run, ADR, output artifacts, validation findings, and revision remain unchanged;
+- two submissions using the same base produce one `201` and one `409 stale_revision`;
+- a complete Phase 3 fixture still completes without showing the clarification panel.
 
 ## Validate live retrieval
 

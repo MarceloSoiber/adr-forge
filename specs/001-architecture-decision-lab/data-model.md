@@ -65,6 +65,36 @@ edited. Scenario classification completes before persistence. The canonical hash
 is preserved, and database IDs, revision numbers, titles, and timestamps are excluded. The total
 UTF-8 request body is limited to 100 KiB before validation.
 
+### ClarificationQuestion and ClarificationAnswer
+
+`ClarificationQuestion` is an immutable view of an `ADRDraft.unresolved_questions` item plus its
+provenance. It is resolved server-side from persisted run evidence rather than accepted as client
+prose.
+
+| Field | Type | Constraints |
+| --- | --- | --- |
+| `question_id` | string | Required; unique within the source ADR |
+| `question` | string | Required authoritative snapshot, 1–2,000 characters |
+| `impact` | string | Required explanation of why the answer matters, 1–2,000 characters |
+| `source_run_id` | UUID | Required terminal run in `needs_clarification` |
+
+`ClarificationAnswer` embeds that question snapshot and adds:
+
+| Field | Type | Constraints |
+| --- | --- | --- |
+| `answer` | string | Required after trimming, 1–5,000 characters |
+
+A revision request contains one to three answers with distinct `question_id` values. Every source
+run belongs to the requested base revision and scenario, owns a stored provisional ADR, and exposes
+the referenced question. Stored answer order follows request order. Revisions append answer
+snapshots to inherited prior answers; an existing question cannot be answered twice in the same
+resulting revision.
+
+Creating revision `N + 1` conditionally advances `DecisionScenario.current_revision_number` only
+when it is still `N`. The head update and revision insert are atomic. A stale base changes neither
+row and returns `409 stale_revision`; previous revisions, runs, ADRs, artifacts, and findings are
+immutable.
+
 ## AnalysisStrategy
 
 Versioned configuration for generating ADRs.

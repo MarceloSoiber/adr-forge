@@ -113,7 +113,17 @@ paths:
         "404":
           $ref: "#/components/responses/ProblemResponse"
         "409":
-          $ref: "#/components/responses/ProblemResponse"
+          description: The supplied base revision is no longer the current scenario revision.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+              example:
+                type: https://adr-forge.local/problems/stale_revision
+                title: Stale scenario revision
+                status: 409
+                code: stale_revision
+                detail: Reload the scenario and deliberately rebase the clarification answers.
         "422":
           $ref: "#/components/responses/ProblemResponse"
   /analysis-runs:
@@ -481,6 +491,7 @@ components:
           items: { type: string, minLength: 1, maxLength: 500 }
     CreateRevisionRequest:
       type: object
+      additionalProperties: false
       required: [base_revision_number, clarification_answers]
       properties:
         base_revision_number: { type: integer, minimum: 1 }
@@ -490,14 +501,15 @@ components:
           maxItems: 3
           items:
             type: object
-            required: [question, answer, source_run_id]
+            additionalProperties: false
+            required: [question_id, answer, source_run_id]
             properties:
-              question: { type: string, minLength: 1, maxLength: 2000 }
+              question_id: { type: string, minLength: 1 }
               answer: { type: string, minLength: 1, maxLength: 5000 }
               source_run_id: { type: string, format: uuid }
     ScenarioRevision:
       type: object
-      required: [id, scenario_id, revision_number, problem, facts, constraints, desired_qualities, candidate_alternatives, categories, content_hash, created_at]
+      required: [id, scenario_id, revision_number, problem, facts, constraints, desired_qualities, candidate_alternatives, clarification_answers, categories, content_hash, created_at]
       properties:
         id: { type: string, format: uuid }
         scenario_id: { type: string, format: uuid }
@@ -507,6 +519,10 @@ components:
         constraints: { type: array, maxItems: 50, items: { type: string } }
         desired_qualities: { type: array, maxItems: 20, items: { type: string } }
         candidate_alternatives: { type: array, maxItems: 20, items: { type: string } }
+        clarification_answers:
+          type: array
+          items:
+            $ref: "#/components/schemas/ClarificationAnswer"
         categories:
           type: array
           minItems: 1
@@ -515,6 +531,16 @@ components:
           items: { $ref: "#/components/schemas/DecisionCategory" }
         content_hash: { type: string, pattern: "^[a-f0-9]{64}$" }
         created_at: { type: string, format: date-time }
+    ClarificationAnswer:
+      type: object
+      additionalProperties: false
+      required: [question_id, question, impact, answer, source_run_id]
+      properties:
+        question_id: { type: string, minLength: 1 }
+        question: { type: string, minLength: 1, maxLength: 2000 }
+        impact: { type: string, minLength: 1, maxLength: 2000 }
+        answer: { type: string, minLength: 1, maxLength: 5000 }
+        source_run_id: { type: string, format: uuid }
     ScenarioResponse:
       type: object
       required: [id, title, language, current_revision]
