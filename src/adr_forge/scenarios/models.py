@@ -9,6 +9,7 @@ from uuid import UUID, uuid4
 
 from pydantic import BaseModel, ConfigDict, Field, computed_field, field_validator, model_validator
 
+from adr_forge.scenarios.clarification import ClarificationAnswer
 from adr_forge.shared.hashing import canonical_sha256
 
 
@@ -63,7 +64,7 @@ class ScenarioRevision(BaseModel):
     constraints: list[LongText] = Field(default_factory=list, max_length=50)
     desired_qualities: list[ShortText] = Field(default_factory=list, max_length=20)
     candidate_alternatives: list[ShortText] = Field(default_factory=list, max_length=20)
-    clarification_answers: list[dict[str, object]] = Field(default_factory=list)
+    clarification_answers: list[ClarificationAnswer] = Field(default_factory=list)
     categories: list[DecisionCategory] = Field(min_length=1)
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
@@ -102,7 +103,9 @@ class ScenarioRevision(BaseModel):
                 "constraints": self.constraints,
                 "desired_qualities": self.desired_qualities,
                 "candidate_alternatives": self.candidate_alternatives,
-                "clarification_answers": self.clarification_answers,
+                "clarification_answers": [
+                    answer.model_dump(mode="json") for answer in self.clarification_answers
+                ],
                 "categories": self.categories,
             }
         )

@@ -368,3 +368,84 @@ error envelope lets the browser handle input, domain, and state-transition failu
   feature routes are about to land.
 - Let framework-native 422 responses pass through: rejected because they violate the published
   problem-details contract.
+
+## Phase 4 Clarification Refinements
+
+### Decision 22 — Treat stored run questions as authoritative evidence
+
+**Decision**: A clarification answer references an unresolved-question ID and source run. The
+server loads the stored provisional ADR, verifies that the run belongs to the requested base
+revision and ended in `needs_clarification`, and snapshots the authoritative question text and
+impact beside the answer in the new revision. Requests do not submit authoritative question prose.
+
+**Rationale**: Question provenance must survive prompt changes and UI retries. Resolving it from
+immutable run evidence prevents a client from rewriting the question, answering a question from a
+different scenario, or creating unsupported context.
+
+**Alternatives considered**:
+
+- Trust question text echoed by the browser: rejected because mutable client text is not reliable
+  evidence.
+- Store only the answer string: rejected because reviewers could not determine what was answered
+  or which model run requested it.
+- Create a mutable question table: rejected because questions already belong to an immutable ADR
+  and Phase 4 does not need an independently editable lifecycle.
+
+### Decision 23 — Append revisions with compare-and-swap on the scenario head
+
+**Decision**: `POST /scenarios/{scenarioId}/revisions` supplies `base_revision_number`. The service
+validates outside the write transaction, then conditionally advances the scenario head and inserts
+revision `base + 1` in one SQLite transaction. If the current head differs, the request returns
+`409` with stable code `stale_revision`; there is no automatic merge or rebase.
+
+**Rationale**: Scenario revisions are immutable, but two browser tabs can still race to append the
+next revision. A conditional head update gives exactly one winner without locks held during model
+or validation work and makes the conflict visible to the architect.
+
+**Alternatives considered**:
+
+- Last write wins: rejected because it silently discards clarification evidence.
+- Pessimistic locking across the request: rejected because SQLite offers no useful row-level lock
+  and the critical section can remain a short atomic transaction.
+- Automatically merge answer sets: rejected because duplicated or contradictory answers require a
+  human rebase decision.
+
+### Decision 24 — Keep answers as answers and preserve the prior snapshot
+
+**Decision**: A clarification revision inherits the base problem, facts, constraints, desired
+qualities, candidate alternatives, and ordered categories, then appends normalized clarification
+answer snapshots. It does not rewrite the base revision or infer that free-text answers are facts
+or constraints. Starting a new analysis run is a separate existing operation after the revision
+commits.
+
+**Rationale**: User answers are relevant evidence, but their semantic role may require judgment.
+Keeping the original fields unchanged preserves auditability, makes canonical hashing
+deterministic, and prevents an analysis enqueue failure from losing submitted answers.
+
+**Alternatives considered**:
+
+- Parse every answer into facts or constraints: rejected because deterministic text heuristics
+  would invent semantics.
+- Mutate the current revision in place: rejected because previous experiment inputs would no
+  longer be reproducible.
+- Create the revision and run in one transaction: rejected because queueing occurs after commit and
+  a run failure must not erase accepted user evidence.
+
+### Decision 25 — Bound provisional confidence and make continuation non-mutating
+
+**Decision**: A valid provisional ADR contains one to three unique impact-aware questions, at
+least one explicit assumption, and confidence no greater than `0.60`. Missing critical context and
+contradictory constraints receive stable validation findings. If the architect declines to answer,
+the browser continues to display and export the existing provisional ADR; no extra revision or run
+is created.
+
+**Rationale**: A numeric ceiling makes “reduced confidence” deterministic and testable while the
+provisional status, assumptions, and questions communicate why the result is uncertain. Reusing
+the stored ADR avoids producing a second output from identical evidence.
+
+**Alternatives considered**:
+
+- Compare confidence with a hypothetical complete run: rejected because no comparable run may
+  exist and model scores are not calibrated across executions.
+- Use only a visual warning: rejected because API, benchmarks, and exports also need the invariant.
+- Rerun when the user declines questions: rejected because it adds cost without adding evidence.

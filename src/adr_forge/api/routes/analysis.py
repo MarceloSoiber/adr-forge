@@ -19,9 +19,15 @@ from adr_forge.decisions.service import DecisionService
 from adr_forge.experiments.run_models import AnalysisRun as DomainAnalysisRun
 from adr_forge.experiments.run_models import RunStatus
 from adr_forge.experiments.run_repository import RunRepository
+from adr_forge.scenarios.clarification import ClarificationAnswer
 from adr_forge.scenarios.repository import ScenarioRepository
-from adr_forge.scenarios.service import CreateScenarioInput, ScenarioService
-from adr_forge.shared.errors import ConflictError, NotFoundError
+from adr_forge.scenarios.service import CreateRevisionInput, CreateScenarioInput, ScenarioService
+from adr_forge.shared.errors import (
+    ConflictError,
+    NotFoundError,
+    StaleRevisionError,
+    ValidationError,
+)
 from adr_forge.strategies.fake import FakeStrategy
 from adr_forge.system.progress import CancellationToken
 
@@ -57,6 +63,7 @@ class ScenarioRevision(BaseModel):
     constraints: list[str]
     desired_qualities: list[str]
     candidate_alternatives: list[str]
+    clarification_answers: list[dict[str, Any]]
     categories: list[str]
     content_hash: str
     created_at: datetime
@@ -67,6 +74,13 @@ class ScenarioResponse(BaseModel):
     title: str
     language: str
     current_revision: ScenarioRevision
+
+
+class CreateRevisionRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    base_revision_number: int = Field(ge=1)
+    clarification_answers: list[dict[str, Any]] = Field(min_length=1, max_length=3)
 
 
 class CreateAnalysisRunRequest(BaseModel):
@@ -181,6 +195,55 @@ async def get_scenario(scenarioId: UUID, request: Request) -> dict[str, Any]:
 
 
 @router.post(
+    "/scenarios/{scenarioId}/revisions",
+    response_model=ScenarioRevision,
+    status_code=201,
+    operation_id="createScenarioRevision",
+    responses={404: PROBLEM, 409: PROBLEM, 422: PROBLEM},
+)
+async def create_scenario_revision(
+    scenarioId: UUID, command: CreateRevisionRequest, request: Request
+) -> dict[str, Any]:
+    try:
+        revision_command = CreateRevisionInput.model_validate(command.model_dump())
+    except ValueError as error:
+        raise ValidationError(str(error)) from error
+    scenarios = ScenarioRepository(request.app.state.session_factory)
+    service = ScenarioService(scenarios)
+    scenario, base = await service.get_current(scenarioId)
+    if base.revision_number != revision_command.base_revision_number:
+        raise StaleRevisionError("Reload the scenario and deliberately rebase answers.")
+    runs = await _run_repository(request)
+    snapshots: list[ClarificationAnswer] = []
+    for answer in revision_command.clarification_answers:
+        run = await runs.get(str(answer.source_run_id))
+        if run is None:
+            raise NotFoundError("Source analysis run not found.")
+        if str(run["scenario_revision_id"]) != str(base.id):
+            raise ValidationError("Source run does not belong to the base scenario revision.")
+        if run["status"] != RunStatus.NEEDS_CLARIFICATION.value:
+            raise ValidationError("Source run is not awaiting clarification.")
+        adr = await runs.get_adr(str(answer.source_run_id))
+        if adr is None or adr.get("status") != "provisional":
+            raise ValidationError("Source run has no provisional ADR.")
+        questions = adr.get("unresolved_questions", [])
+        question = next((item for item in questions if item.get("id") == answer.question_id), None)
+        if question is None:
+            raise ValidationError("Clarification question does not belong to the source ADR.")
+        snapshots.append(
+            ClarificationAnswer(
+                question_id=answer.question_id,
+                answer=answer.answer,
+                source_run_id=answer.source_run_id,
+                question=question["question"],
+                impact=question["impact"],
+            )
+        )
+    revision = await service.create_clarification_revision(scenario.id, revision_command, snapshots)
+    return {**revision.model_dump(mode="json"), "content_hash": revision.content_hash}
+
+
+@router.post(
     "/analysis-runs",
     response_model=AnalysisRun,
     status_code=202,
@@ -252,9 +315,17 @@ async def create_analysis_run(
         "created_at": now,
     }
     await repository.add_validation_attempt(str(run.id), attempt)
+    terminal_status = (
+        RunStatus.NEEDS_CLARIFICATION if adr.status.value == "provisional" else RunStatus.COMPLETED
+    )
+    terminal_stage = (
+        "aguardando esclarecimentos"
+        if terminal_status == RunStatus.NEEDS_CLARIFICATION
+        else "concluído"
+    )
     completed = running.transition(
-        RunStatus.COMPLETED,
-        stage="concluído",
+        terminal_status,
+        stage=terminal_stage,
         progress_percent=100,
         adr_draft_id=adr.id,
         input_tokens=generated.generation.telemetry.input_tokens,

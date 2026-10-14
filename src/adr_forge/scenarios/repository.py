@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import json
+from typing import Any, cast
 
 from sqlalchemy import text
+from sqlalchemy.engine import CursorResult
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
@@ -121,6 +123,41 @@ class ScenarioRepository:
             ],
             created_at=row["created_at"],
         )
+
+    async def append_revision(
+        self, scenario: DecisionScenario, base: ScenarioRevision, revision: ScenarioRevision
+    ) -> bool:
+        """Advance the scenario head and add a revision with a single CAS transaction."""
+        if (
+            revision.scenario_id != scenario.id
+            or revision.revision_number != base.revision_number + 1
+        ):
+            raise ValueError("revision must immediately follow the supplied scenario base")
+        try:
+            async with self._session_factory.begin() as session:
+                result = cast(
+                    CursorResult[Any],
+                    await session.execute(
+                        text(
+                            "UPDATE decision_scenarios SET "
+                            "current_revision_number = :next_revision, "
+                            "updated_at = :updated_at WHERE id = :scenario_id "
+                            "AND current_revision_number = :base_revision"
+                        ),
+                        {
+                            "scenario_id": str(scenario.id),
+                            "base_revision": base.revision_number,
+                            "next_revision": revision.revision_number,
+                            "updated_at": revision.created_at,
+                        },
+                    ),
+                )
+                if result.rowcount != 1:
+                    return False
+                await self._insert_revision(session, revision)
+        except IntegrityError as error:
+            raise ConflictError("Clarification answers duplicate an existing revision.") from error
+        return True
 
     async def _insert_revision(self, session: AsyncSession, revision: ScenarioRevision) -> None:
         payload = revision.model_dump(mode="json")
