@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from enum import StrEnum
+from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -26,6 +27,7 @@ class StrategyAvailability(BaseModel):
 
     available: bool
     unavailable_reason: str | None = None
+    unavailable_reason_code: str | None = None
 
 
 class AnalysisStrategy(BaseModel):
@@ -36,9 +38,18 @@ class AnalysisStrategy(BaseModel):
     kind: StrategyKind
     model_id: str = Field(min_length=1)
     model_revision: str = Field(min_length=1)
+    adapter_artifact_id: UUID | None = None
     prompt_version: str = Field(min_length=1)
     generation_config_hash: str = Field(pattern=r"^[a-f0-9]{64}$")
     requires_retrieval: bool = False
     runtime_kind: RuntimeKind
     enabled: bool = True
     availability: StrategyAvailability
+
+    def model_post_init(self, __context: object) -> None:
+        retrieval_kinds = {StrategyKind.RAG, StrategyKind.FINE_TUNED_RAG}
+        fine_tuned_kinds = {StrategyKind.FINE_TUNED, StrategyKind.FINE_TUNED_RAG}
+        if self.requires_retrieval != (self.kind in retrieval_kinds):
+            raise ValueError("requires_retrieval must match the strategy kind")
+        if self.kind not in fine_tuned_kinds and self.adapter_artifact_id is not None:
+            raise ValueError("only fine-tuned strategies may specify an adapter artifact")

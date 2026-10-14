@@ -8,8 +8,9 @@ installation guarantee for the current documentation-only repository.
 - `uv`, Python 3.12, Node.js, npm, and Git.
 - A local writable directory for temporary SQLite metadata and artifacts.
 
-The Phase 3 fake-runtime flow is CPU-safe and requires neither a GPU, model download, nor
-Knowledge Hub. Live Qwen validation additionally requires an NVIDIA driver, an RTX 3060-class GPU
+The Phase 3 fake-runtime and Phase 5 fixture-comparison flows are CPU-safe and require neither a
+GPU, model download, nor Knowledge Hub. Live Qwen validation additionally requires an NVIDIA
+driver, an RTX 3060-class GPU
 with 12 GB VRAM, access to the pinned `Qwen/Qwen3-4B-Instruct-2507` revision, sufficient local
 disk, and any conflicting LM Studio model unloaded.
 
@@ -134,17 +135,59 @@ Expected result:
 - two submissions using the same base produce one `201` and one `409 stale_revision`;
 - a complete Phase 3 fixture still completes without showing the clarification panel.
 
+## Validate the Phase 5 strategy comparison
+
+Run the focused CPU-safe suites against a fresh migrated temporary database and artifact root:
+
+```bash
+uv run alembic upgrade head
+uv run pytest \
+  tests/contract/test_knowledge_hub.py \
+  tests/unit/retrieval/test_snapshot.py \
+  tests/integration/test_strategy_equivalence.py \
+  tests/unit/evaluation/test_blinding.py \
+  -m "not gpu and not live_integration"
+npm --prefix apps/web test -- BlindComparison.test.tsx
+npm --prefix apps/web run build
+```
+
+Expected result: the mocked adapter obeys one 15-second total budget and exact retry policy; a
+fixture produces byte-stable canonical snapshot content; fake RAG strategies observe the same
+scenario, snapshot, evidence order, and generation configuration; and identity cannot be revealed
+before a complete immutable evaluation is submitted.
+
+With the local application running, perform the fixture vertical slice:
+
+1. Create a snapshot through `POST /api/v1/retrieval-snapshots` using `provider=fixture` and a
+   configured fixture ID. Repeat the request and confirm the canonical content hash and snapshot
+   identity are reused.
+2. Create two completed fake RAG runs for the same scenario revision and snapshot. Confirm their
+   persisted snapshot ID and generation configuration hash are equal.
+3. Create a comparison and fetch it before evaluation. Confirm the response and rendered DOM show
+   only opaque labels, ADR review content, and rubric definitions—no run, strategy, model, snapshot,
+   artifact, timing, or resource identity.
+4. Call reveal before submission and confirm `409 evaluation_required`.
+5. Score every label/dimension, choose one label or a tie, optionally add notes, and submit. Confirm
+   the result is immutable and reveal now returns label-to-run/strategy provenance.
+6. Submit again without a superseding result ID and confirm `409 evaluation_already_submitted`.
+   Submit an explicit correction against the current result and confirm a new result becomes the
+   head while the original remains unchanged.
+
+The phase passes only if all of the above works without network, CUDA, model packages, or arbitrary
+fixture filesystem paths.
+
 ## Validate live retrieval
 
 ```bash
-uv run adr-forge retrieval snapshot \
-  --scenario SCENARIO_REVISION_ID \
-  --output var/artifacts/retrieval/manual-snapshot.json
+curl --fail-with-body http://127.0.0.1:8000/api/v1/retrieval-snapshots \
+  -H 'Content-Type: application/json' \
+  --data '{"provider":"knowledge_hub","query":"restrições para processamento assíncrono","filters":{"limit":8}}'
 ```
 
 Expected result: the artifact contains ordered Knowledge Hub chunks, exact content, source
-locations, scores, query and content hashes. Repeating an experiment uses this stored snapshot
-rather than silently retrieving again.
+locations, scores, provider and embedding identity, query and content hashes. The bearer token is
+absent from the response and logs. Repeating an experiment uses this stored snapshot rather than
+silently retrieving again. This check is opt-in and requires the loopback Knowledge Hub service.
 
 ## Validate a GPU baseline
 

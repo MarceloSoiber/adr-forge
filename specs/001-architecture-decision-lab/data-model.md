@@ -132,8 +132,21 @@ Immutable context retrieved once and reused across comparable strategies.
 | `artifact_id` | UUID | Exact snapshot artifact |
 | `created_at` | timestamp | Required |
 
-Each snapshot artifact contains ordered `RetrievalChunkSnapshot` entries with source ID, chunk ID,
-title, URI, location, exact content, score, match reasons, rank, and content hash.
+The canonical artifact is a closed JSON document with `schema_version`, provider identity/version,
+query, normalized filters, embedding identity, and ordered `RetrievalChunkSnapshot` entries. Each
+chunk contains source ID, chunk ID, title, URI, structured location, exact content, finite score,
+ordered match reasons, one-based unique rank, and its own content hash. Provider order is
+significant and is never re-sorted.
+
+`content_hash` is calculated from that complete canonical document. It excludes snapshot ID,
+artifact ID/path, and `created_at`; all request, provider, embedding, ordering, and chunk fields are
+included. An equal hash must resolve to byte-identical canonical artifact content or fail an
+integrity check. The unique hash permits safe create-or-reuse after concurrent retrieval.
+
+The artifact bytes are published before a single metadata transaction inserts `Artifact`,
+`RetrievalSnapshot`, and `ArtifactReference(owner_type="retrieval_snapshot")`. A database rollback
+may leave only an unreferenced physical object for conservative reconciliation; committed snapshot
+metadata must never point to missing bytes.
 
 ## AnalysisRun
 
@@ -146,6 +159,9 @@ Immutable execution record with controlled state transitions.
 | `strategy_id` / `strategy_version` | string | Required composite reference |
 | `retrieval_snapshot_id` | UUID? | Required when strategy requires retrieval |
 | `experiment_id` | UUID? | Optional grouping reference |
+| `scenario_content_hash` | SHA-256 | Frozen input identity |
+| `strategy_configuration_hash` | SHA-256 | Model, revision, adapter, prompt, and strategy identity |
+| `generation_config_hash` | SHA-256 | Frozen decoding configuration identity |
 | `status` | enum | See state machine below |
 | `stage` | string | Sanitized current progress stage |
 | `progress_percent` | integer? | 0–100 when measurable |
@@ -271,13 +287,42 @@ unsupported claims.
 
 ## BlindComparison and EvaluationResult
 
-`BlindComparison` maps two or more run IDs to randomized anonymous labels. The mapping is hidden
-until a valid `EvaluationResult` is submitted.
+`BlindComparison` contains an ID, immutable rubric version ID, creation timestamp, and nullable
+`current_evaluation_id`. It accepts at least two distinct completed runs with stored ADRs from the
+same scenario revision. RAG candidates in one comparison use the same retrieval snapshot and
+generation configuration.
 
-`EvaluationResult` fields include comparison ID, evaluator pseudonymous ID, rubric version,
-per-label dimension scores, preference or tie, notes, submission timestamp, evaluator type
-(`human`, `llm_assisted`, `deterministic`), and optional judge model identity. Submitted results are
-immutable; corrections create a superseding result.
+`ComparisonCandidate` is a child row containing comparison ID, opaque randomized label, run ID,
+and frozen ADR artifact/content hash. Unique constraints cover `(comparison_id, label)` and
+`(comparison_id, run_id)`. Labels do not encode insertion order, run, strategy, or model identity.
+The normal ADR/run representation is never serialized from this row before reveal.
+
+`BlindedCandidate` is the public pre-reveal projection: anonymous label plus reviewable ADR content
+only. It omits ADR ID, analysis run ID, strategy/model/prompt/adapter identity, retrieval identity,
+artifact identity, timestamps, latency, and resource measurements. `BlindComparison` also projects
+the immutable rubric dimensions, anchors, and score bounds so clients do not hard-code them.
+
+`EvaluationResult` fields are:
+
+| Field | Type | Constraints |
+| --- | --- | --- |
+| `id` | UUID | Primary key |
+| `comparison_id` | UUID | Required foreign key |
+| `rubric_version_id` | UUID | Must equal comparison rubric |
+| `evaluator_id` | string | Pseudonymous, 1–200 characters |
+| `evaluator_type` | enum | `human`, `llm_assisted`, `deterministic` |
+| `judge_model_identity` | object? | Required only when an external judge model is used |
+| `scores` | object | Exact label × rubric-dimension integer matrix within declared bounds |
+| `preference` | string | One comparison label or `tie` |
+| `notes` | string? | At most 5,000 characters |
+| `supersedes_evaluation_id` | UUID? | Current result of the same comparison when correcting |
+| `submitted_at` | timestamp | Required |
+
+The first valid submission sets `current_evaluation_id` in the same transaction. A correction is a
+new immutable row whose `supersedes_evaluation_id` equals the current head; the head then advances
+atomically. Duplicate initial submissions, stale parents, cross-comparison parents, cycles, and
+score matrices with missing/extra labels or dimensions are rejected. Reveal is permitted only when
+`current_evaluation_id` is non-null; evaluation history is never overwritten.
 
 ## DatasetExample
 
@@ -347,7 +392,13 @@ deletion before later owner tables are introduced.
 - Dataset membership indexes on `(dataset_version_id, split)` and `lineage_group_id`.
 - Artifact unique index on `(sha256, kind)` and index on retention.
 - Artifact-reference index on `(artifact_id, owner_type)`.
-- Evaluation indexes on comparison and rubric version.
+- Retrieval snapshot unique index on `content_hash` and indexes on `(provider, created_at)` and
+  `artifact_id`.
+- Rubric version unique indexes on `(name, version)` and `content_hash`.
+- Comparison-candidate unique indexes on `(comparison_id, label)` and
+  `(comparison_id, run_id)`.
+- Evaluation indexes on `(comparison_id, submitted_at)` and `rubric_version_id`, plus a unique
+  nullable `supersedes_evaluation_id` so one result cannot fork into two direct corrections.
 
 ## Retention and Recovery
 

@@ -449,3 +449,107 @@ the stored ADR avoids producing a second output from identical evidence.
   exist and model scores are not calibrated across executions.
 - Use only a visual warning: rejected because API, benchmarks, and exports also need the invariant.
 - Rerun when the user declines questions: rejected because it adds cost without adding evidence.
+
+## Phase 5 Strategy Comparison Refinements
+
+### Decision 26 — Hash the complete versioned retrieval envelope and reuse by content
+
+**Decision**: Model retrieval filters, locations, and chunks as frozen closed value objects and
+serialize a versioned canonical snapshot with the existing shared canonical JSON implementation.
+The content hash covers provider and embedding identity, normalized query and filters, and every
+exact chunk field in provider rank order. Database IDs, artifact paths, and creation timestamps are
+excluded. Publish the canonical JSON artifact first, then commit its artifact metadata, snapshot,
+and owner reference in one database transaction. Reuse an existing row by unique content hash.
+
+**Rationale**: Experimental equivalence requires the query, provider configuration, and exact
+ordered evidence—not only source IDs—to be reproducible. Excluding storage identity and time makes
+identical evidence deduplicable while retaining all variables that could affect generation.
+
+**Alternatives considered**:
+
+- Hash only chunk text or IDs: rejected because request, provider, embedding, ordering, scores, and
+  provenance could change without changing identity.
+- Include creation time in the content hash: rejected because identical evidence could never be
+  reused.
+- Re-query for each strategy: rejected because mutable retrieval would confound the comparison.
+
+### Decision 27 — Enforce one wall-clock retrieval deadline around both attempts
+
+**Decision**: Implement the Knowledge Hub adapter with an injected `httpx.AsyncClient`, monotonic
+deadline, sleeper, and jitter source. A single 15-second wall-clock budget includes at most two
+attempts and their backoff; each connection attempt has a 2-second connect timeout. Retry only
+connection failures, 408, 429, and 5xx. Validate the complete response projection, provider
+version, and embedding identity before producing a snapshot. Authentication, other 4xx, malformed
+responses, and missing required fields fail immediately with sanitized stable reasons.
+
+**Rationale**: An `httpx` timeout applied independently to each attempt can exceed the advertised
+total. Injected time and backoff make exact retry behavior testable without sleeping, while strict
+schema validation prevents partial or unauthenticated evidence from being mislabeled as RAG.
+
+**Alternatives considered**:
+
+- Add a general retry library: rejected because one bounded retry does not justify another
+  dependency.
+- Retry every failure or return empty context: rejected because both violate the retrieval
+  contract and strategy identity.
+- Trust provider or embedding identity from optional fields: rejected because live snapshots
+  without pinned provenance are not reproducible.
+
+### Decision 28 — Freeze one execution envelope before comparable strategy runs
+
+**Decision**: Evolve strategy execution around an immutable input envelope containing scenario
+revision identity/hash, optional retrieval snapshot identity/hash, and versioned generation
+configuration/hash. Strategies compose prompts but never retrieve. RAG-capable runs in one cohort
+must use the same snapshot and decoding configuration; a non-RAG strategy receives no snapshot.
+Persist these identities on every run and fail before queueing when required dependencies are
+missing. Fine-tuned definitions remain unavailable until a compatible adapter artifact exists.
+
+**Rationale**: The experiment must vary declared strategy/model/prompt inputs without accidentally
+varying scenario, retrieved evidence, or decoding configuration. Persisted identities remain true
+even if the in-memory registry later changes.
+
+**Alternatives considered**:
+
+- Compare only by scenario ID: rejected because retrieval and decoding remain hidden variables.
+- Let each strategy retrieve or choose decoding parameters: rejected because it prevents causal
+  attribution.
+- Pass a snapshot to the baseline: rejected because that changes a non-RAG treatment into RAG.
+
+### Decision 29 — Persist the secret mapping and append-only evaluation chain
+
+**Decision**: A blind comparison stores randomized opaque labels in child rows with unique
+comparison/label and comparison/run constraints. Pre-submission DTOs contain a dedicated blinded
+ADR projection and public rubric definition, never the normal ADR/run DTO. The first complete
+evaluation atomically becomes the comparison head and unlocks reveal. A correction supplies the
+current result ID, creates a new immutable result with `supersedes_evaluation_id`, and atomically
+advances the head; stale or duplicate submissions conflict.
+
+**Rationale**: Separate public projection prevents accidental identity leakage. Append-only
+supersession preserves the original human judgment and provides deterministic concurrency
+behavior while allowing an explicit correction workflow.
+
+**Alternatives considered**:
+
+- Derive labels from run IDs or insertion order: rejected because identities become guessable.
+- Reuse the full ADR response before submission: rejected because it includes run provenance.
+- Update an evaluation in place: rejected because it destroys audit history.
+
+### Decision 30 — Pull the minimum immutable rubric into Phase 5 and advance migration IDs
+
+**Decision**: Phase 5 introduces the minimal published `RubricVersion` required to render and
+validate blind evaluation, seeded from a versioned tracked definition. Scores use each dimension's
+declared bounds rather than browser constants. Because `0005_run_events.py` and
+`0006_run_telemetry.py` already exist, retrieval and blind-evaluation schema changes use
+`0007_retrieval_snapshots.py` and `0008_blind_evaluation.py`; later migration numbers advance.
+
+**Rationale**: A rubric identifier without a resolvable immutable definition cannot drive complete
+server validation or accessible UI controls. Reusing occupied Alembic revisions would create a
+broken history.
+
+**Alternatives considered**:
+
+- Wait for the Phase 6 experiment task to create rubrics: rejected because Phase 5 cannot submit a
+  valid rubric evaluation without it.
+- Hard-code score bounds only in React/OpenAPI: rejected because multiple implementations could
+  drift and the recorded rubric would not be reproducible.
+- Rename existing migrations: rejected because merged migration history is immutable.

@@ -60,6 +60,28 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/StrategySummary"
+  /retrieval-snapshots:
+    post:
+      operationId: createRetrievalSnapshot
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateRetrievalSnapshotRequest"
+      responses:
+        "201":
+          description: Immutable snapshot created; an identical canonical snapshot may reuse existing content.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RetrievalSnapshot"
+        "409":
+          $ref: "#/components/responses/ProblemResponse"
+        "422":
+          $ref: "#/components/responses/ProblemResponse"
+        "503":
+          $ref: "#/components/responses/ProblemResponse"
   /scenarios:
     post:
       operationId: createScenario
@@ -319,6 +341,10 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/BlindComparison"
+        "404":
+          $ref: "#/components/responses/ProblemResponse"
+        "409":
+          $ref: "#/components/responses/ProblemResponse"
         "422":
           $ref: "#/components/responses/ProblemResponse"
   /comparisons/{comparisonId}:
@@ -333,6 +359,8 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/BlindComparison"
+        "404":
+          $ref: "#/components/responses/ProblemResponse"
   /comparisons/{comparisonId}/evaluation:
     post:
       operationId: submitBlindEvaluation
@@ -346,7 +374,7 @@ paths:
               $ref: "#/components/schemas/SubmitEvaluationRequest"
       responses:
         "201":
-          description: Immutable evaluation recorded.
+          description: Immutable initial evaluation or explicit superseding correction recorded.
           content:
             application/json:
               schema:
@@ -355,6 +383,8 @@ paths:
           $ref: "#/components/responses/ProblemResponse"
         "422":
           $ref: "#/components/responses/ProblemResponse"
+        "404":
+          $ref: "#/components/responses/ProblemResponse"
   /comparisons/{comparisonId}/reveal:
     get:
       operationId: revealComparisonIdentities
@@ -362,14 +392,13 @@ paths:
         - $ref: "#/components/parameters/ComparisonId"
       responses:
         "200":
-          description: Label-to-run mapping after evaluation submission.
+          description: Label-to-run and strategy mapping after evaluation submission.
           content:
             application/json:
               schema:
-                type: object
-                additionalProperties:
-                  type: string
-                  format: uuid
+                $ref: "#/components/schemas/ComparisonReveal"
+        "404":
+          $ref: "#/components/responses/ProblemResponse"
         "409":
           $ref: "#/components/responses/ProblemResponse"
 components:
@@ -455,6 +484,7 @@ components:
     StrategySummary:
       type: object
       required: [id, version, kind, model_id, model_revision, requires_retrieval, available]
+      additionalProperties: false
       properties:
         id: { type: string }
         version: { type: string }
@@ -466,6 +496,45 @@ components:
         requires_retrieval: { type: boolean }
         available: { type: boolean }
         unavailable_reason: { type: [string, "null"] }
+        unavailable_reason_code: { type: [string, "null"] }
+    CreateRetrievalSnapshotRequest:
+      type: object
+      required: [provider, query, filters]
+      additionalProperties: false
+      properties:
+        provider: { type: string, enum: [knowledge_hub, fixture] }
+        query: { type: string, minLength: 1, maxLength: 10000 }
+        filters:
+          $ref: "#/components/schemas/RetrievalFilters"
+        fixture_id:
+          type: [string, "null"]
+          pattern: "^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$"
+          description: Server-configured fixture identity; never an arbitrary filesystem path.
+    RetrievalFilters:
+      type: object
+      additionalProperties: false
+      properties:
+        limit: { type: integer, minimum: 1, maximum: 50, default: 8 }
+        category_ids: { type: [array, "null"], items: { type: integer, minimum: 1 } }
+        tag_ids: { type: [array, "null"], items: { type: integer, minimum: 1 } }
+        project_ids: { type: [array, "null"], items: { type: integer, minimum: 1 } }
+        min_score: { type: [number, "null"], minimum: 0, maximum: 1 }
+    RetrievalSnapshot:
+      type: object
+      required: [id, schema_version, provider, provider_version, query, filters, embedding_model, embedding_version, content_hash, artifact_id, created_at]
+      additionalProperties: false
+      properties:
+        id: { type: string, format: uuid }
+        schema_version: { type: string }
+        provider: { type: string, enum: [knowledge_hub, fixture] }
+        provider_version: { type: string }
+        query: { type: string }
+        filters: { $ref: "#/components/schemas/RetrievalFilters" }
+        embedding_model: { type: string }
+        embedding_version: { type: string }
+        content_hash: { type: string, pattern: "^[a-f0-9]{64}$" }
+        artifact_id: { type: string, format: uuid }
+        created_at: { type: string, format: date-time }
     CreateScenarioRequest:
       type: object
       required: [title, language, problem]
@@ -560,12 +629,17 @@ components:
         experiment_id: { type: [string, "null"], format: uuid }
     AnalysisRun:
       type: object
-      required: [id, scenario_revision_id, strategy_id, strategy_version, status, stage, progress_sequence, validation_attempts, created_at, updated_at]
+      required: [id, scenario_revision_id, strategy_id, strategy_version, scenario_content_hash, strategy_configuration_hash, generation_config_hash, status, stage, progress_sequence, validation_attempts, created_at, updated_at]
       properties:
         id: { type: string, format: uuid }
         scenario_revision_id: { type: string, format: uuid }
         strategy_id: { type: string }
         strategy_version: { type: string }
+        retrieval_snapshot_id: { type: [string, "null"], format: uuid }
+        experiment_id: { type: [string, "null"], format: uuid }
+        scenario_content_hash: { type: string, pattern: "^[a-f0-9]{64}$" }
+        strategy_configuration_hash: { type: string, pattern: "^[a-f0-9]{64}$" }
+        generation_config_hash: { type: string, pattern: "^[a-f0-9]{64}$" }
         status:
           type: string
           enum: [pending, waiting_resources, running, completed, needs_clarification, invalid_output, failed, cancelled, interrupted]
@@ -754,6 +828,7 @@ components:
     CreateComparisonRequest:
       type: object
       required: [run_ids, rubric_version_id]
+      additionalProperties: false
       properties:
         run_ids:
           type: array
@@ -763,36 +838,132 @@ components:
         rubric_version_id: { type: string, format: uuid }
     BlindComparison:
       type: object
-      required: [id, labels, rubric_version_id, evaluated]
+      required: [id, candidates, rubric, evaluated, current_evaluation_id]
+      additionalProperties: false
       properties:
         id: { type: string, format: uuid }
-        labels:
-          type: object
-          description: Anonymous label to ADR content; no run identity before evaluation.
-          additionalProperties: { $ref: "#/components/schemas/AdrDraft" }
-        rubric_version_id: { type: string, format: uuid }
+        candidates:
+          type: array
+          minItems: 2
+          items: { $ref: "#/components/schemas/BlindedCandidate" }
+        rubric: { $ref: "#/components/schemas/RubricDefinition" }
         evaluated: { type: boolean }
+        current_evaluation_id: { type: [string, "null"], format: uuid }
+    BlindedCandidate:
+      type: object
+      required: [label, adr]
+      additionalProperties: false
+      properties:
+        label: { type: string, pattern: "^[A-Z][A-Z0-9]{0,7}$" }
+        adr: { $ref: "#/components/schemas/BlindedAdrDraft" }
+    BlindedAdrDraft:
+      type: object
+      description: Review content with all run, strategy, model, snapshot, artifact, and timing identity removed.
+      required: [schema_version, title, status, context, facts, assumptions, unresolved_questions, constraints, alternatives, decision, rationale, positive_consequences, negative_consequences, risks, review_triggers, confidence, reference_ids]
+      additionalProperties: false
+      properties:
+        schema_version: { type: string }
+        title: { type: string, minLength: 3, maxLength: 200 }
+        status: { type: string, enum: [provisional, proposed] }
+        context: { type: array, minItems: 1, items: { type: string } }
+        facts: { type: array, items: { type: string } }
+        assumptions: { type: array, items: { $ref: "#/components/schemas/Assumption" } }
+        unresolved_questions: { type: array, maxItems: 3, items: { $ref: "#/components/schemas/UnresolvedQuestion" } }
+        constraints: { type: array, items: { type: string } }
+        alternatives: { type: array, items: { $ref: "#/components/schemas/Alternative" } }
+        decision: { type: [string, "null"] }
+        rationale: { type: array, items: { $ref: "#/components/schemas/RationaleLink" } }
+        positive_consequences: { type: array, items: { type: string } }
+        negative_consequences: { type: array, items: { type: string } }
+        risks: { type: array, items: { $ref: "#/components/schemas/Risk" } }
+        review_triggers: { type: array, items: { $ref: "#/components/schemas/ReviewTrigger" } }
+        confidence: { type: number, minimum: 0, maximum: 1 }
+        reference_ids: { type: array, items: { type: string } }
+    RubricDefinition:
+      type: object
+      required: [id, name, version, content_hash, dimensions]
+      additionalProperties: false
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        version: { type: string }
+        content_hash: { type: string, pattern: "^[a-f0-9]{64}$" }
+        dimensions:
+          type: array
+          minItems: 1
+          items: { $ref: "#/components/schemas/RubricDimension" }
+    RubricDimension:
+      type: object
+      required: [key, description, minimum, maximum, anchors]
+      additionalProperties: false
+      properties:
+        key: { type: string }
+        description: { type: string }
+        minimum: { type: integer }
+        maximum: { type: integer }
+        anchors:
+          type: object
+          additionalProperties: { type: string }
     SubmitEvaluationRequest:
       type: object
-      required: [evaluator_id, scores, preference]
+      required: [evaluator_id, evaluator_type, scores, preference]
+      additionalProperties: false
       properties:
         evaluator_id: { type: string, minLength: 1, maxLength: 200 }
+        evaluator_type: { type: string, enum: [human, llm_assisted, deterministic] }
+        judge_model_identity:
+          type: [object, "null"]
+          additionalProperties: false
+          properties:
+            model_id: { type: string }
+            model_revision: { type: string }
         scores:
           type: object
           additionalProperties:
             type: object
-            additionalProperties: { type: integer, minimum: 0, maximum: 4 }
+            additionalProperties: { type: integer }
         preference: { type: string, description: Anonymous label or `tie` }
         notes: { type: string, maxLength: 5000 }
+        supersedes_evaluation_id: { type: [string, "null"], format: uuid }
     EvaluationResult:
       type: object
-      required: [id, comparison_id, rubric_version_id, evaluator_id, scores, preference, submitted_at]
+      required: [id, comparison_id, rubric_version_id, evaluator_id, evaluator_type, scores, preference, supersedes_evaluation_id, submitted_at]
+      additionalProperties: false
       properties:
         id: { type: string, format: uuid }
         comparison_id: { type: string, format: uuid }
         rubric_version_id: { type: string, format: uuid }
         evaluator_id: { type: string }
+        evaluator_type: { type: string, enum: [human, llm_assisted, deterministic] }
+        judge_model_identity:
+          type: [object, "null"]
+          additionalProperties: false
+          properties:
+            model_id: { type: string }
+            model_revision: { type: string }
         scores: { type: object, additionalProperties: true }
         preference: { type: string }
         notes: { type: [string, "null"] }
+        supersedes_evaluation_id: { type: [string, "null"], format: uuid }
         submitted_at: { type: string, format: date-time }
+    ComparisonReveal:
+      type: object
+      required: [comparison_id, evaluation_id, candidates]
+      additionalProperties: false
+      properties:
+        comparison_id: { type: string, format: uuid }
+        evaluation_id: { type: string, format: uuid }
+        candidates:
+          type: array
+          minItems: 2
+          items:
+            type: object
+            required: [label, run_id, strategy_id, strategy_version, generation_config_hash]
+            additionalProperties: false
+            properties:
+              label: { type: string }
+              run_id: { type: string, format: uuid }
+              strategy_id: { type: string }
+              strategy_version: { type: string }
+              retrieval_snapshot_id: { type: [string, "null"], format: uuid }
+              generation_config_hash: { type: string, pattern: "^[a-f0-9]{64}$" }
