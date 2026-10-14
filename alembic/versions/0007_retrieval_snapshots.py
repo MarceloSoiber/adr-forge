@@ -32,7 +32,9 @@ def upgrade() -> None:
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.CheckConstraint("length(query) > 0", name="ck_retrieval_snapshot_query"),
     )
-    op.create_index("ix_retrieval_snapshots_provider_created", "retrieval_snapshots", ["provider", "created_at"])
+    op.create_index(
+        "ix_retrieval_snapshots_provider_created", "retrieval_snapshots", ["provider", "created_at"]
+    )
     op.create_index("ix_retrieval_snapshots_artifact", "retrieval_snapshots", ["artifact_id"])
 
 

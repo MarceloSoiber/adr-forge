@@ -10,8 +10,13 @@ from pydantic import BaseModel, ConfigDict
 from adr_forge.evaluation.models import CandidateRun, EvaluationResult, EvaluatorType, RubricVersion
 
 
-class EvaluationConflict(ValueError): pass
-class EvaluationRequired(ValueError): pass
+class EvaluationConflict(ValueError):
+    pass
+
+
+class EvaluationRequired(ValueError):
+    pass
+
 
 class BlindedCandidate(BaseModel):
     """The identity-safe candidate representation exposed before evaluation."""
@@ -44,14 +49,25 @@ class Reveal(BaseModel):
     evaluation_id: UUID
     candidates: list[RevealedCandidate]
 
+
 class Comparison:
-    def __init__(self, candidates: list[CandidateRun], rubric: RubricVersion, shuffler: Callable[[list[CandidateRun]], list[CandidateRun]]) -> None:
-        if len(candidates) < 2 or len({item.run_id for item in candidates}) != len(candidates): raise ValueError("comparison requires two distinct completed runs")
-        if any(item.status != "completed" for item in candidates): raise ValueError("comparison candidates must be completed")
-        if len({item.scenario_revision_id for item in candidates}) != 1: raise ValueError("comparison candidates must share scenario revision")
+    def __init__(
+        self,
+        candidates: list[CandidateRun],
+        rubric: RubricVersion,
+        shuffler: Callable[[list[CandidateRun]], list[CandidateRun]],
+    ) -> None:
+        if len(candidates) < 2 or len({item.run_id for item in candidates}) != len(candidates):
+            raise ValueError("comparison requires two distinct completed runs")
+        if any(item.status != "completed" for item in candidates):
+            raise ValueError("comparison candidates must be completed")
+        if len({item.scenario_revision_id for item in candidates}) != 1:
+            raise ValueError("comparison candidates must share scenario revision")
         # Allocate labels before shuffling.  A shuffle changes display order but
         # never changes which run is represented by a given blind label.
-        labeled_candidates = [(chr(65 + index), candidate) for index, candidate in enumerate(candidates)]
+        labeled_candidates = [
+            (chr(65 + index), candidate) for index, candidate in enumerate(candidates)
+        ]
         self.id = uuid4()
         self.rubric = rubric
         self._candidates = list(shuffler(labeled_candidates))
@@ -59,9 +75,13 @@ class Comparison:
 
     def blinded(self) -> BlindedComparison:
         return BlindedComparison(
-            candidates=[BlindedCandidate(label=label, adr=candidate.adr) for label, candidate in self._candidates],
+            candidates=[
+                BlindedCandidate(label=label, adr=candidate.adr)
+                for label, candidate in self._candidates
+            ],
             evaluated=bool(self._history),
         )
+
     @classmethod
     def restore(
         cls,
@@ -79,27 +99,66 @@ class Comparison:
         instance._history = history
         return instance
 
-    def submit(self, *, evaluator_id: str, evaluator_type: str, scores: dict[str, dict[str, int]], preference: str, notes: str | None = None, supersedes_evaluation_id: UUID | None = None) -> EvaluationResult:
+    def submit(
+        self,
+        *,
+        evaluator_id: str,
+        evaluator_type: str,
+        scores: dict[str, dict[str, int]],
+        preference: str,
+        notes: str | None = None,
+        supersedes_evaluation_id: UUID | None = None,
+    ) -> EvaluationResult:
         labels = [item.label for item in self.blinded().candidates]
         dimensions = {item.key: item for item in self.rubric.dimensions}
-        if set(scores) != set(labels) or any(set(value) != set(dimensions) for value in scores.values()): raise ValueError("scores must cover every label and dimension")
-        if preference != "tie" and preference not in labels: raise ValueError("preference must be a label or tie")
+        if set(scores) != set(labels) or any(
+            set(value) != set(dimensions) for value in scores.values()
+        ):
+            raise ValueError("scores must cover every label and dimension")
+        if preference != "tie" and preference not in labels:
+            raise ValueError("preference must be a label or tie")
         if self._history:
-            if supersedes_evaluation_id is None: raise EvaluationConflict("evaluation_already_submitted")
+            if supersedes_evaluation_id is None:
+                raise EvaluationConflict("evaluation_already_submitted")
             if supersedes_evaluation_id != self._history[-1].id:
-                if any(item.id == supersedes_evaluation_id for item in self._history): raise EvaluationConflict("stale evaluation")
+                if any(item.id == supersedes_evaluation_id for item in self._history):
+                    raise EvaluationConflict("stale evaluation")
                 raise EvaluationConflict("stale comparison correction parent")
-        elif supersedes_evaluation_id is not None: raise EvaluationConflict("comparison has no evaluation to correct")
-        result = EvaluationResult(comparison_id=self.id, rubric_version_id=self.rubric.id, evaluator_id=evaluator_id, evaluator_type=EvaluatorType(evaluator_type), scores=scores, preference=preference, notes=notes, supersedes_evaluation_id=supersedes_evaluation_id)
-        self._history.append(result); return result
+        elif supersedes_evaluation_id is not None:
+            raise EvaluationConflict("comparison has no evaluation to correct")
+        result = EvaluationResult(
+            comparison_id=self.id,
+            rubric_version_id=self.rubric.id,
+            evaluator_id=evaluator_id,
+            evaluator_type=EvaluatorType(evaluator_type),
+            scores=scores,
+            preference=preference,
+            notes=notes,
+            supersedes_evaluation_id=supersedes_evaluation_id,
+        )
+        self._history.append(result)
+        return result
+
     def reveal(self) -> Reveal:
-        if not self._history: raise EvaluationRequired("evaluation_required")
+        if not self._history:
+            raise EvaluationRequired("evaluation_required")
         return Reveal(
             evaluation_id=self._history[-1].id,
-            candidates=[RevealedCandidate(label=label, candidate=candidate) for label, candidate in self._candidates],
+            candidates=[
+                RevealedCandidate(label=label, candidate=candidate)
+                for label, candidate in self._candidates
+            ],
         )
-    def history(self) -> list[EvaluationResult]: return list(self._history)
+
+    def history(self) -> list[EvaluationResult]:
+        return list(self._history)
+
 
 class BlindComparisonService:
-    def __init__(self, *, shuffler: Callable[[list[CandidateRun]], list[CandidateRun]] = lambda value: value) -> None: self._shuffler = shuffler
-    def create(self, *, candidates: list[CandidateRun], rubric: RubricVersion) -> Comparison: return Comparison(candidates, rubric, self._shuffler)
+    def __init__(
+        self, *, shuffler: Callable[[list[CandidateRun]], list[CandidateRun]] = lambda value: value
+    ) -> None:
+        self._shuffler = shuffler
+
+    def create(self, *, candidates: list[CandidateRun], rubric: RubricVersion) -> Comparison:
+        return Comparison(candidates, rubric, self._shuffler)

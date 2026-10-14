@@ -48,64 +48,124 @@ class EvaluationRepository:
                         "strategy_version": candidate.strategy_version,
                         "generation_config_hash": candidate.generation_config_hash,
                         "retrieval_snapshot_id": str(candidate.retrieval_snapshot_id)
-                        if candidate.retrieval_snapshot_id else None,
+                        if candidate.retrieval_snapshot_id
+                        else None,
                     },
                 )
 
     async def get_comparison(self, comparison_id: UUID) -> Comparison | None:
         async with self._session_factory() as session:
-            header = (await session.execute(
-                text("SELECT id, rubric_json FROM blind_comparisons WHERE id = :id"),
-                {"id": str(comparison_id)},
-            )).mappings().one_or_none()
+            header = (
+                (
+                    await session.execute(
+                        text("SELECT id, rubric_json FROM blind_comparisons WHERE id = :id"),
+                        {"id": str(comparison_id)},
+                    )
+                )
+                .mappings()
+                .one_or_none()
+            )
             if header is None:
                 return None
-            candidates = (await session.execute(
-                text("""SELECT label, run_id, adr_json, strategy_id, strategy_version,
+            candidates = (
+                (
+                    await session.execute(
+                        text("""SELECT label, run_id, adr_json, strategy_id, strategy_version,
                     generation_config_hash, retrieval_snapshot_id FROM comparison_candidates
-                    WHERE comparison_id = :id ORDER BY label"""), {"id": str(comparison_id)}
-            )).mappings().all()
-            evaluations = (await session.execute(
-                text("""SELECT id, comparison_id, rubric_version_id, evaluator_id, evaluator_type,
-                    scores_json, preference, notes, supersedes_evaluation_id, submitted_at
-                    FROM evaluation_results WHERE comparison_id = :id ORDER BY submitted_at, id"""),
-                {"id": str(comparison_id)},
-            )).mappings().all()
+                    WHERE comparison_id = :id ORDER BY label"""),
+                        {"id": str(comparison_id)},
+                    )
+                )
+                .mappings()
+                .all()
+            )
+            evaluations = (
+                (
+                    await session.execute(
+                        text(
+                            """SELECT id, comparison_id, rubric_version_id, evaluator_id,
+                            evaluator_type, scores_json, preference, notes,
+                            supersedes_evaluation_id, submitted_at
+                            FROM evaluation_results
+                            WHERE comparison_id = :id ORDER BY submitted_at, id"""
+                        ),
+                        {"id": str(comparison_id)},
+                    )
+                )
+                .mappings()
+                .all()
+            )
 
         # All candidate runs were validated when the comparison was created.  The
         # persisted aggregate deliberately retains only their immutable evidence.
         revision_id = UUID(int=0)
         restored_candidates = [
-            (row["label"], CandidateRun(
-                run_id=UUID(row["run_id"]), scenario_revision_id=revision_id,
-                status="completed", adr=json.loads(row["adr_json"]),
-                strategy_id=row["strategy_id"], strategy_version=row["strategy_version"],
-                generation_config_hash=row["generation_config_hash"],
-                retrieval_snapshot_id=UUID(row["retrieval_snapshot_id"])
-                if row["retrieval_snapshot_id"] else None,
-            ))
+            (
+                row["label"],
+                CandidateRun(
+                    run_id=UUID(row["run_id"]),
+                    scenario_revision_id=revision_id,
+                    status="completed",
+                    adr=json.loads(row["adr_json"]),
+                    strategy_id=row["strategy_id"],
+                    strategy_version=row["strategy_version"],
+                    generation_config_hash=row["generation_config_hash"],
+                    retrieval_snapshot_id=UUID(row["retrieval_snapshot_id"])
+                    if row["retrieval_snapshot_id"]
+                    else None,
+                ),
+            )
             for row in candidates
         ]
-        history = [EvaluationResult.model_validate({
-            **{key: value for key, value in dict(row).items() if key != "scores_json"},
-            "scores": json.loads(row["scores_json"]),
-        }) for row in evaluations]
+        history = [
+            EvaluationResult.model_validate(
+                {
+                    **{key: value for key, value in dict(row).items() if key != "scores_json"},
+                    "scores": json.loads(row["scores_json"]),
+                }
+            )
+            for row in evaluations
+        ]
         return Comparison.restore(
-            identity=UUID(header["id"]), candidates=restored_candidates,
-            rubric=RubricVersion.model_validate(json.loads(header["rubric_json"])), history=history,
+            identity=UUID(header["id"]),
+            candidates=restored_candidates,
+            rubric=RubricVersion.model_validate(json.loads(header["rubric_json"])),
+            history=history,
         )
 
     async def append_evaluation(self, result: EvaluationResult) -> None:
         """Append an immutable result and atomically advance the comparison head."""
         try:
             async with self._session_factory.begin() as session:
-                expected_head = str(result.supersedes_evaluation_id) if result.supersedes_evaluation_id else None
-                condition = "current_evaluation_id IS NULL" if expected_head is None else "current_evaluation_id = :expected_head"
-                advanced = cast(CursorResult[Any], await session.execute(
-                    text(f"""UPDATE blind_comparisons SET current_evaluation_id = :evaluation_id
-                        WHERE id = :comparison_id AND {condition}"""),
-                    {"evaluation_id": str(result.id), "comparison_id": str(result.comparison_id), "expected_head": expected_head},
-                ))
+                expected_head = (
+                    str(result.supersedes_evaluation_id)
+                    if result.supersedes_evaluation_id
+                    else None
+                )
+                statement = (
+                    text(
+                        """UPDATE blind_comparisons
+                        SET current_evaluation_id = :evaluation_id
+                        WHERE id = :comparison_id AND current_evaluation_id IS NULL"""
+                    )
+                    if expected_head is None
+                    else text(
+                        """UPDATE blind_comparisons
+                        SET current_evaluation_id = :evaluation_id
+                        WHERE id = :comparison_id AND current_evaluation_id = :expected_head"""
+                    )
+                )
+                advanced = cast(
+                    CursorResult[Any],
+                    await session.execute(
+                        statement,
+                        {
+                            "evaluation_id": str(result.id),
+                            "comparison_id": str(result.comparison_id),
+                            "expected_head": expected_head,
+                        },
+                    ),
+                )
                 if advanced.rowcount != 1:
                     raise EvaluationConflict("stale evaluation")
                 await session.execute(
@@ -116,13 +176,17 @@ class EvaluationRepository:
                          :evaluator_type, :scores_json, :preference, :notes,
                          :supersedes_evaluation_id, :submitted_at)"""),
                     {
-                        "id": str(result.id), "comparison_id": str(result.comparison_id),
+                        "id": str(result.id),
+                        "comparison_id": str(result.comparison_id),
                         "rubric_version_id": str(result.rubric_version_id),
-                        "evaluator_id": result.evaluator_id, "evaluator_type": result.evaluator_type.value,
-                        "scores_json": json.dumps(result.scores), "preference": result.preference,
+                        "evaluator_id": result.evaluator_id,
+                        "evaluator_type": result.evaluator_type.value,
+                        "scores_json": json.dumps(result.scores),
+                        "preference": result.preference,
                         "notes": result.notes,
                         "supersedes_evaluation_id": str(result.supersedes_evaluation_id)
-                        if result.supersedes_evaluation_id else None,
+                        if result.supersedes_evaluation_id
+                        else None,
                         "submitted_at": result.submitted_at,
                     },
                 )

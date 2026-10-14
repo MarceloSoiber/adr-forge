@@ -31,19 +31,32 @@ class BlindComparisonService:
         if current is not None and result.supersedes_evaluation_id != current:
             raise ConflictError("evaluation must explicitly supersede the current result")
         self._evaluations[result.id] = result
-        self._comparisons[comparison.id] = comparison.model_copy(update={"current_evaluation_id": result.id})
+        self._comparisons[comparison.id] = comparison.model_copy(
+            update={"current_evaluation_id": result.id}
+        )
         return result
 
     def reveal(self, comparison_id: UUID) -> dict[str, object]:
         comparison = self._comparison(comparison_id)
         if comparison.current_evaluation_id is None:
-            raise PreconditionFailedError("Submit an immutable evaluation before revealing identities.")
-        return {"comparison_id": comparison.id, "evaluation_id": comparison.current_evaluation_id, "candidates": [
-            {"label": candidate.label, "run_id": candidate.run_id, "strategy_id": candidate.strategy_id,
-             "strategy_version": candidate.strategy_version, "retrieval_snapshot_id": candidate.retrieval_snapshot_id,
-             "generation_config_hash": candidate.generation_config_hash}
-            for candidate in comparison.candidates
-        ]}
+            raise PreconditionFailedError(
+                "Submit an immutable evaluation before revealing identities."
+            )
+        return {
+            "comparison_id": comparison.id,
+            "evaluation_id": comparison.current_evaluation_id,
+            "candidates": [
+                {
+                    "label": candidate.label,
+                    "run_id": candidate.run_id,
+                    "strategy_id": candidate.strategy_id,
+                    "strategy_version": candidate.strategy_version,
+                    "retrieval_snapshot_id": candidate.retrieval_snapshot_id,
+                    "generation_config_hash": candidate.generation_config_hash,
+                }
+                for candidate in comparison.candidates
+            ],
+        }
 
     def _comparison(self, comparison_id: UUID) -> BlindComparison:
         try:

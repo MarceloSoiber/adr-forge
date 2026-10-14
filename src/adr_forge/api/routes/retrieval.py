@@ -37,9 +37,7 @@ class CreateRetrievalSnapshotRequest(BaseModel):
     provider: Literal["knowledge_hub", "fixture"]
     query: str = Field(min_length=1, max_length=10_000)
     filters: ApiRetrievalFilters
-    fixture_id: str | None = Field(
-        default=None, pattern=r"^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$"
-    )
+    fixture_id: str | None = Field(default=None, pattern=r"^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$")
 
     @model_validator(mode="after")
     def validate_provider_options(self) -> CreateRetrievalSnapshotRequest:

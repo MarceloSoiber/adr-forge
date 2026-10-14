@@ -45,23 +45,58 @@ class ArtifactRepository:
         return artifact_id
 
     async def create(
-        self, *, kind: str, sha256: str, relative_path: str, size_bytes: int,
-        media_type: str, created_at: datetime, retention: str = "keep"
+        self,
+        *,
+        kind: str,
+        sha256: str,
+        relative_path: str,
+        size_bytes: int,
+        media_type: str,
+        created_at: datetime,
+        retention: str = "keep",
     ) -> str:
         """Create or reuse a content-addressed artifact of an allowed catalog kind."""
-        if kind not in {"raw_output", "retrieval_snapshot", "model", "adapter", "checkpoint", "report", "config", "log"}:
+        if kind not in {
+            "raw_output",
+            "retrieval_snapshot",
+            "model",
+            "adapter",
+            "checkpoint",
+            "report",
+            "config",
+            "log",
+        }:
             raise ValueError("unsupported artifact kind")
         async with self._session_factory.begin() as session:
-            existing = await session.execute(text("SELECT id FROM artifacts WHERE sha256 = :sha256 AND kind = :kind"), {"sha256": sha256, "kind": kind})
+            existing = await session.execute(
+                text("SELECT id FROM artifacts WHERE sha256 = :sha256 AND kind = :kind"),
+                {"sha256": sha256, "kind": kind},
+            )
             artifact_id = cast(str | None, existing.scalar_one_or_none())
             if artifact_id is not None:
                 return str(artifact_id)
             artifact_id = str(uuid4())
-            await session.execute(text("""INSERT INTO artifacts (id, kind, relative_path, sha256, size_bytes, media_type, created_at, retention)
-                VALUES (:id, :kind, :relative_path, :sha256, :size_bytes, :media_type, :created_at, :retention)"""), {
-                "id": artifact_id, "kind": kind, "relative_path": relative_path, "sha256": sha256,
-                "size_bytes": size_bytes, "media_type": media_type, "created_at": created_at, "retention": retention,
-            })
+            await session.execute(
+                text(
+                    """INSERT INTO artifacts (
+                    id, kind, relative_path, sha256, size_bytes, media_type,
+                    created_at, retention
+                    ) VALUES (
+                    :id, :kind, :relative_path, :sha256, :size_bytes, :media_type,
+                    :created_at, :retention
+                    )"""
+                ),
+                {
+                    "id": artifact_id,
+                    "kind": kind,
+                    "relative_path": relative_path,
+                    "sha256": sha256,
+                    "size_bytes": size_bytes,
+                    "media_type": media_type,
+                    "created_at": created_at,
+                    "retention": retention,
+                },
+            )
         return artifact_id
 
     async def reference(

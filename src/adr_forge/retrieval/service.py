@@ -31,8 +31,13 @@ class RetrievalService:
         data = snapshot.canonical_json_bytes()
         sha256, size, path = await self._store.put_bytes(data)
         artifact_id = await self._artifacts.create(
-            kind="retrieval_snapshot", sha256=sha256, relative_path=path, size_bytes=size,
-            media_type="application/json", created_at=datetime.now(UTC), retention="keep",
+            kind="retrieval_snapshot",
+            sha256=sha256,
+            relative_path=path,
+            size_bytes=size,
+            media_type="application/json",
+            created_at=datetime.now(UTC),
+            retention="keep",
         )
         persisted = snapshot.model_copy(update={"artifact_id": UUID(artifact_id)})
         try:
