@@ -41,12 +41,11 @@ class QwenRuntime(StructuredOutputStrategy):
             from transformers import (
                 AutoModelForCausalLM,
                 AutoTokenizer,
-                StoppingCriteria,
                 StoppingCriteriaList,
             )
         except ImportError as error:
             raise RuntimeError("Qwen runtime requires the optional 'ml' dependencies.") from error
-        tokenizer = AutoTokenizer.from_pretrained(  # type: ignore[no-untyped-call]
+        tokenizer = AutoTokenizer.from_pretrained(
             QWEN_MODEL_ID, revision=self.revision, trust_remote_code=False
         )
         model = AutoModelForCausalLM.from_pretrained(
@@ -56,7 +55,7 @@ class QwenRuntime(StructuredOutputStrategy):
         cancellation.raise_if_cancelled()
         started = perf_counter()
 
-        class _CancellationStoppingCriteria(StoppingCriteria):
+        class _CancellationStoppingCriteria:
             def __call__(self, input_ids: object, scores: object, **kwargs: object) -> bool:
                 return cancellation.is_cancelled
 
