@@ -4,7 +4,12 @@ from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
 
-from adr_forge.experiments.models import Experiment, ExperimentAccounting, FrozenMatrixCell, MatrixOutcome
+from adr_forge.experiments.models import (
+    Experiment,
+    ExperimentAccounting,
+    FrozenMatrixCell,
+    MatrixOutcome,
+)
 
 
 class BenchmarkRunner:
