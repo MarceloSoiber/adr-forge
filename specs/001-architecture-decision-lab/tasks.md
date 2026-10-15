@@ -182,9 +182,9 @@ primary output path.
 
 - [X] T077 [P] [US4] Add experiment lifecycle and complete/partial accounting tests in `tests/unit/experiments/test_experiment.py`
 - [X] T078 [P] [US4] Add deterministic evaluator tests for structure, alternatives, negative consequences, review triggers, assumption labeling, references, and missing-context handling in `tests/unit/evaluation/test_deterministic.py`
-- [ ] T079 [P] [US4] Add resume tests proving completed runs are immutable and only missing matrix cells are scheduled in `tests/integration/test_benchmark_resume.py`
-- [ ] T080 [P] [US4] Add report tests proving failures, exclusions, latency, resources, model/dataset/rubric/config identities, and unfavorable results are visible in `tests/integration/test_benchmark_report.py`
-- [ ] T081 [P] [US4] Add CLI contract tests for benchmark exit codes, progress streams, partial status, and JSON output in `tests/contract/test_benchmark_cli.py`
+- [X] T079 [P] [US4] Add resume tests proving completed runs are immutable and only missing matrix cells are scheduled in `tests/integration/test_benchmark_resume.py`
+- [X] T080 [P] [US4] Add report tests proving failures, exclusions, latency, resources, model/dataset/rubric/config identities, and unfavorable results are visible in `tests/integration/test_benchmark_report.py`
+- [X] T081 [P] [US4] Add CLI contract tests for benchmark exit codes, progress streams, partial status, and JSON output in `tests/contract/test_benchmark_cli.py`
 
 ### Evaluation and experiment model
 
@@ -198,9 +198,9 @@ primary output path.
 
 ### CLI, API, and web
 
-- [ ] T089 [US4] Implement `adr-forge benchmark run` with foreground execution, progress, resume, and complete/partial exit semantics in `src/adr_forge/cli/benchmark_run.py`
-- [ ] T090 [P] [US4] Implement `adr-forge benchmark report` with Markdown and JSON outputs in `src/adr_forge/cli/benchmark_report.py`
-- [ ] T091 [US4] Implement experiment create/get/runs/report endpoints in `src/adr_forge/api/routes/experiments.py`
+- [X] T089 [US4] Implement `adr-forge benchmark run` with foreground execution, progress, resume, and complete/partial exit semantics in `src/adr_forge/cli/benchmark_run.py`
+- [X] T090 [P] [US4] Implement `adr-forge benchmark report` with Markdown and JSON outputs in `src/adr_forge/cli/benchmark_report.py`
+- [X] T091 [US4] Implement experiment create/get/runs/report endpoints in `src/adr_forge/api/routes/experiments.py`
 - [X] T092 [P] [US4] Add the versioned default rubric and fake smoke benchmark configuration in `configs/evaluation/architecture-v1.yaml` and `configs/evaluation/smoke.yaml`
 - [X] T093 [US4] Implement experiment status, per-run accounting, metrics, failures, exclusions, and report download UI in `apps/web/src/features/experiments/ExperimentReport.tsx`
 
