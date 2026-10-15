@@ -71,7 +71,10 @@ def _snapshot() -> RetrievalSnapshot:
 @pytest.mark.asyncio
 async def test_comparable_rag_strategies_observe_the_same_frozen_strategy_input() -> None:
     prompted, rag = _RecordingRuntime(), _RecordingRuntime()
-    service = StrategyExecutionService(runtimes={"prompted": prompted, "rag": rag})
+    service = StrategyExecutionService(
+        runtimes={"prompted": prompted, "rag": rag},
+        retrieval_strategy_ids={"rag"},
+    )
     scenario, snapshot = _scenario(), _snapshot()
 
     await service.execute_comparison(
@@ -89,6 +92,7 @@ async def test_comparable_rag_strategies_observe_the_same_frozen_strategy_input(
         == scenario.content_hash
     )
     assert rag_input.retrieval_snapshot_id == snapshot.id
+    assert rag_input.snapshot is not None
     assert [chunk.content for chunk in rag_input.snapshot.chunks] == [
         "Primeira evidência.",
         "Segunda evidência.",
@@ -100,7 +104,8 @@ async def test_comparable_rag_strategies_observe_the_same_frozen_strategy_input(
 @pytest.mark.asyncio
 async def test_rag_requires_frozen_snapshot_and_non_rag_rejects_one() -> None:
     service = StrategyExecutionService(
-        runtimes={"prompted": _RecordingRuntime(), "rag": _RecordingRuntime()}
+        runtimes={"prompted": _RecordingRuntime(), "rag": _RecordingRuntime()},
+        retrieval_strategy_ids={"rag"},
     )
     with pytest.raises(ValueError, match="snapshot"):
         await service.execute(
@@ -109,4 +114,34 @@ async def test_rag_requires_frozen_snapshot_and_non_rag_rejects_one() -> None:
     with pytest.raises(ValueError, match="snapshot"):
         await service.execute(
             "prompted", scenario=_scenario(), snapshot=_snapshot(), generation_configuration={}
+        )
+
+
+@pytest.mark.asyncio
+async def test_fine_tuned_rag_uses_explicit_retrieval_metadata_in_comparison() -> None:
+    prompted, fine_tuned_rag = _RecordingRuntime(), _RecordingRuntime()
+    service = StrategyExecutionService(
+        runtimes={"prompted": prompted, "fine-tuned-rag": fine_tuned_rag},
+        retrieval_strategy_ids={"fine-tuned-rag"},
+    )
+    snapshot = _snapshot()
+
+    await service.execute_comparison(
+        scenario=_scenario(),
+        snapshot=snapshot,
+        generation_configuration={"temperature": 0},
+        strategies=[("prompted", "prompt-v2"), ("fine-tuned-rag", "prompt-rag-v2")],
+    )
+
+    assert prompted.inputs[0].snapshot is None
+    assert prompted.inputs[0].retrieval_snapshot_id is None
+    assert fine_tuned_rag.inputs[0].snapshot is snapshot
+    assert fine_tuned_rag.inputs[0].retrieval_snapshot_id == snapshot.id
+
+
+def test_retrieval_metadata_rejects_unknown_strategy_ids() -> None:
+    with pytest.raises(ValueError, match="fine_tuned_rag"):
+        StrategyExecutionService(
+            runtimes={"fine-tuned-rag": _RecordingRuntime()},
+            retrieval_strategy_ids={"fine_tuned_rag"},
         )

@@ -22,7 +22,7 @@ class FakeStrategy(StructuredOutputStrategy):
     ) -> GenerationResult:
         cancellation.raise_if_cancelled()
         started = perf_counter()
-        alternatives = scenario.candidate_alternatives or ["Opção A", "Opção B"]
+        alternatives = list(scenario.candidate_alternatives) or ["Opção A", "Opção B"]
         while len(alternatives) < 2:
             alternatives.append("Alternativa adicional")
         facts = scenario.facts
