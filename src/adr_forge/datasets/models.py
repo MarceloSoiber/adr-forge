@@ -33,22 +33,34 @@ class DatasetExample(BaseModel):
     target_adr_artifact_id: UUID | None = None
     source_type: SourceType
     source_uri: str | None = None
-    license: str = Field(min_length=1, max_length=500)
+    # Legacy manifests are intentionally allowed to carry a blank license so
+    # governance can report it as a finding instead of making validation stop
+    # at parsing time. Native prompt/completion records still require it.
+    license: str = Field(max_length=500)
     language: str = "pt-BR"
     categories: list[DecisionCategory] = Field(min_length=1)
     lineage_parent_ids: list[UUID] = Field(default_factory=list)
     review_status: ReviewStatus = ReviewStatus.DRAFT
     reviewed_by: str | None = Field(default=None, min_length=1, max_length=200)
     reviewed_at: datetime | None = None
-    prompt: str = Field(min_length=1, max_length=20_000)
-    completion: str = Field(min_length=1, max_length=40_000)
+    prompt: str = Field(default="", max_length=20_000)
+    completion: str = Field(default="", max_length=40_000)
+    content: str | None = Field(default=None, min_length=1, max_length=60_000)
 
     @model_validator(mode="after")
     def governed_fields(self) -> DatasetExample:
         if self.language != "pt-BR":
             raise ValueError("dataset examples must use pt-BR")
-        if self.source_type == SourceType.PUBLIC_SOURCE_DERIVED and not self.source_uri:
+        if (
+            self.source_type == SourceType.PUBLIC_SOURCE_DERIVED
+            and not self.source_uri
+            and self.content is None
+        ):
             raise ValueError("public-source-derived examples require source_uri")
+        if not self.license.strip() and self.content is None:
+            raise ValueError("dataset examples require a license")
+        if self.content is None and (not self.prompt or not self.completion):
+            raise ValueError("dataset examples require prompt and completion")
         terminal = {ReviewStatus.APPROVED, ReviewStatus.REJECTED}
         if self.review_status in terminal and (not self.reviewed_by or not self.reviewed_at):
             raise ValueError("terminal review status requires reviewer and timestamp")
@@ -61,16 +73,31 @@ class DatasetExample(BaseModel):
     @property
     def content_hash(self) -> str:
         return canonical_sha256(
-            {"prompt": self.prompt, "completion": self.completion, "categories": self.categories}
+            {
+                "content": self.content,
+                "prompt": self.prompt,
+                "completion": self.completion,
+                "categories": self.categories,
+            }
         )
 
     def transition_review(
-        self, status: ReviewStatus, *, reviewed_by: str | None = None
+        self,
+        status: ReviewStatus,
+        *,
+        reviewed_by: str | None = None,
+        reviewed_at: datetime | None = None,
     ) -> DatasetExample:
         allowed = {
             ReviewStatus.DRAFT: {ReviewStatus.UNDER_REVIEW},
             ReviewStatus.UNDER_REVIEW: {ReviewStatus.APPROVED, ReviewStatus.REJECTED},
         }
+        if self.content is not None and self.review_status is ReviewStatus.DRAFT:
+            allowed[ReviewStatus.DRAFT] = {
+                ReviewStatus.UNDER_REVIEW,
+                ReviewStatus.APPROVED,
+                ReviewStatus.REJECTED,
+            }
         if status not in allowed.get(self.review_status, set()):
             if self.review_status in {ReviewStatus.APPROVED, ReviewStatus.REJECTED}:
                 raise ValueError("terminal dataset review is immutable")
@@ -80,7 +107,7 @@ class DatasetExample(BaseModel):
         values = {
             "review_status": status,
             "reviewed_by": reviewed_by,
-            "reviewed_at": datetime.now(UTC)
+            "reviewed_at": reviewed_at or datetime.now(UTC)
             if status in {ReviewStatus.APPROVED, ReviewStatus.REJECTED}
             else None,
         }

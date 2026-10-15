@@ -4,6 +4,7 @@ import typer
 
 from adr_forge.cli.benchmark_report import benchmark_report
 from adr_forge.cli.benchmark_run import benchmark_run
+from adr_forge.cli.dataset import dataset_build, dataset_validate
 from adr_forge.cli.doctor import doctor
 
 app = typer.Typer(
@@ -23,6 +24,11 @@ benchmark = typer.Typer(help="Execute and report reproducible benchmarks.")
 benchmark.command("run")(benchmark_run)
 benchmark.command("report")(benchmark_report)
 app.add_typer(benchmark, name="benchmark")
+
+dataset = typer.Typer(help="Validate and build governed training datasets.")
+dataset.command("validate")(dataset_validate)
+dataset.command("build")(dataset_build)
+app.add_typer(dataset, name="dataset")
 
 
 if __name__ == "__main__":

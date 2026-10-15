@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+import unicodedata
 from collections import defaultdict
 from collections.abc import Iterable
 from dataclasses import dataclass
@@ -20,7 +21,11 @@ class ContaminationFinding:
 
 
 def _normalise(value: str) -> str:
-    return re.sub(r"\W+", "", value.casefold())
+    decomposed = unicodedata.normalize("NFKD", value.casefold())
+    accent_free = "".join(
+        character for character in decomposed if not unicodedata.combining(character)
+    )
+    return re.sub(r"\W+", "", accent_free)
 
 
 def detect_contamination(
@@ -44,6 +49,13 @@ def detect_contamination(
     for kind, groups in (("exact_duplicate", by_hash), ("normalized_duplicate", by_normalised)):
         for duplicate_examples in groups.values():
             if len(duplicate_examples) > 1:
+                # Exact duplicates are the stronger, already-reported finding;
+                # do not emit the same pair again as a normalized duplicate.
+                if (
+                    kind == "normalized_duplicate"
+                    and len({item.content_hash for item in duplicate_examples}) == 1
+                ):
+                    continue
                 findings.append(
                     ContaminationFinding(
                         kind,
