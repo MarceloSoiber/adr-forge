@@ -26,10 +26,19 @@ def validate_example(example: DatasetExample) -> list[GovernanceFinding]:
     if not example.license.strip():
         findings.append(GovernanceFinding("license_missing", True, "A license is required."))
     if example.source_type == SourceType.PUBLIC_SOURCE_DERIVED and not example.source_uri:
-        findings.append(GovernanceFinding("source_uri_missing", True, "Public source requires URI."))
-    if example.source_type == SourceType.SYNTHETIC and example.review_status != ReviewStatus.APPROVED:
-        findings.append(GovernanceFinding("synthetic_unreviewed", True, "Synthetic content requires approval."))
+        findings.append(
+            GovernanceFinding("source_uri_missing", True, "Public source requires URI.")
+        )
+    if (
+        example.source_type == SourceType.SYNTHETIC
+        and example.review_status != ReviewStatus.APPROVED
+    ):
+        findings.append(
+            GovernanceFinding("synthetic_unreviewed", True, "Synthetic content requires approval.")
+        )
     content = f"{example.prompt}\n{example.completion}"
     if any(pattern.search(content) for pattern in _SENSITIVE_PATTERNS):
-        findings.append(GovernanceFinding("sensitive_content_suspected", True, "Potential sensitive data."))
+        findings.append(
+            GovernanceFinding("sensitive_content_suspected", True, "Potential sensitive data.")
+        )
     return findings

@@ -11,7 +11,9 @@ from typer.testing import CliRunner
 from adr_forge.cli.main import app
 
 
-def _example(*, source_type: str = "authored", review_status: str = "approved") -> dict[str, object]:
+def _example(
+    *, source_type: str = "authored", review_status: str = "approved"
+) -> dict[str, object]:
     return {
         "id": str(uuid4()),
         "scenario_revision_id": str(uuid4()),

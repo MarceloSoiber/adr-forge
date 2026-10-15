@@ -75,7 +75,9 @@ def test_normalized_duplicate_across_train_and_evaluation_is_a_blocking_finding(
 
 def test_lineage_group_cannot_cross_into_fixed_evaluation_partition() -> None:
     parent = _example("Escolher SQL para transações críticas.")
-    derivative = _example("Escolher SQL para transações críticas em pagamentos.", parent_ids=[parent.id])
+    derivative = _example(
+        "Escolher SQL para transações críticas em pagamentos.", parent_ids=[parent.id]
+    )
     family = uuid4()
 
     findings = detect_contamination(
