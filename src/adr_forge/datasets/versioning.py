@@ -65,6 +65,8 @@ class DatasetVersion(BaseModel):
             },
         }
         if status not in allowed.get(self.status, set()):
+            if self.status == DatasetVersionStatus.PUBLISHED:
+                raise ValueError("published dataset version is immutable")
             raise ValueError("illegal dataset version transition")
         return self.model_copy(
             update={

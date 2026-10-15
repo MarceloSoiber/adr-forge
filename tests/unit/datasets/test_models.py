@@ -84,7 +84,7 @@ def test_dataset_version_publishing_freezes_manifest_and_membership() -> None:
     assert published.manifest_hash == "a" * 64
     assert published.memberships == [membership]
     assert version.status is DatasetVersionStatus.BUILDING
-    with pytest.raises(ValueError, match="published|immutable"):
+    with pytest.raises(ValueError, match=r"published|immutable"):
         published.transition(DatasetVersionStatus.REJECTED)
 
 

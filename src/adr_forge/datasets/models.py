@@ -72,7 +72,11 @@ class DatasetExample(BaseModel):
             ReviewStatus.UNDER_REVIEW: {ReviewStatus.APPROVED, ReviewStatus.REJECTED},
         }
         if status not in allowed.get(self.review_status, set()):
+            if self.review_status in {ReviewStatus.APPROVED, ReviewStatus.REJECTED}:
+                raise ValueError("terminal dataset review is immutable")
             raise ValueError("illegal dataset review transition")
+        if status in {ReviewStatus.APPROVED, ReviewStatus.REJECTED} and not reviewed_by:
+            raise ValueError("terminal review requires reviewed_by")
         values = {
             "review_status": status,
             "reviewed_by": reviewed_by,
