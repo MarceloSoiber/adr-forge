@@ -14,6 +14,7 @@ from adr_forge.api.problem_details import install_problem_details_handlers
 from adr_forge.api.routes.analysis import ProgressEvent
 from adr_forge.api.routes.analysis import router as analysis_router
 from adr_forge.api.routes.comparisons import router as comparisons_router
+from adr_forge.api.routes.experiments import router as experiments_router
 from adr_forge.api.routes.retrieval import router as retrieval_router
 from adr_forge.api.routes.strategies import router as strategies_router
 from adr_forge.api.routes.system import router as system_router
@@ -60,6 +61,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     application.include_router(retrieval_router)
     application.include_router(strategies_router)
     application.include_router(comparisons_router)
+    application.include_router(experiments_router)
 
     original_openapi = application.openapi
 

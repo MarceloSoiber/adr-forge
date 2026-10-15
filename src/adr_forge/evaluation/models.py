@@ -9,6 +9,8 @@ from uuid import UUID, uuid4
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from adr_forge.shared.hashing import canonical_sha256
+
 
 class EvaluatorType(StrEnum):
     HUMAN = "human"
@@ -22,12 +24,14 @@ class RubricDimension(BaseModel):
     description: str = Field(min_length=1)
     minimum: int
     maximum: int
-    anchors: dict[str, str]
+    anchors: dict[str, str] = Field(min_length=2)
 
     @model_validator(mode="after")
     def valid_bounds(self) -> RubricDimension:
         if self.minimum > self.maximum:
             raise ValueError("rubric minimum must not exceed maximum")
+        if set(self.anchors) != {str(self.minimum), str(self.maximum)}:
+            raise ValueError("rubric anchors must define the minimum and maximum scores")
         return self
 
 
@@ -43,9 +47,27 @@ class RubricDefinition(BaseModel):
 class RubricVersion(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
     id: UUID = Field(default_factory=uuid4)
-    name: str
-    version: str
+    name: str = Field(min_length=1, max_length=200)
+    version: str = Field(min_length=1, max_length=100)
     dimensions: list[RubricDimension] = Field(min_length=1)
+    content_hash: str | None = Field(default=None, pattern=r"^[a-f0-9]{64}$")
+    published_at: datetime | None = None
+
+    @model_validator(mode="after")
+    def immutable_definition(self) -> RubricVersion:
+        if len({dimension.key for dimension in self.dimensions}) != len(self.dimensions):
+            raise ValueError("rubric dimension keys must be unique")
+        expected = canonical_sha256(
+            {
+                "name": self.name,
+                "version": self.version,
+                "dimensions": [item.model_dump(mode="json") for item in self.dimensions],
+            }
+        )
+        if self.content_hash is not None and self.content_hash != expected:
+            raise ValueError("rubric content_hash does not match its immutable definition")
+        object.__setattr__(self, "content_hash", expected)
+        return self
 
 
 class CandidateRun(BaseModel):

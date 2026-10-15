@@ -17,6 +17,7 @@ dependencies = [
   "httpx>=0.28,<1",
   "pydantic>=2.10,<3",
   "pydantic-settings>=2.7,<3",
+  "PyYAML>=6,<7",
   "sqlalchemy[asyncio]>=2.0,<3",
   "typer>=0.15,<1",
   "uvicorn[standard]>=0.34,<1",
@@ -32,6 +33,7 @@ dev = [
   "pytest-cov>=6,<7",
   "respx>=0.22,<1",
   "ruff>=0.9,<1",
+  "types-PyYAML>=6.0.12.20250915",
 ]
 ml = [
   "accelerate>=1.2,<2",
