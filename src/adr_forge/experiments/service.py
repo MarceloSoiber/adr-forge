@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from uuid import UUID
 
 from adr_forge.evaluation.models import RubricVersion
 from adr_forge.experiments.models import Experiment, FrozenMatrixCell
+from adr_forge.scenarios.models import ScenarioRevision
 from adr_forge.shared.hashing import canonical_sha256
 from adr_forge.strategies.models import AnalysisStrategy
 
@@ -13,7 +15,7 @@ from adr_forge.strategies.models import AnalysisStrategy
 def create_experiment(
     *,
     name: str,
-    scenario_revisions: list[object],
+    scenario_revisions: Sequence[ScenarioRevision],
     strategies: list[AnalysisStrategy],
     rubric: RubricVersion,
     code_revision: str,

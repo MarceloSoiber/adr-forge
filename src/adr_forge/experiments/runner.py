@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
 
-from adr_forge.experiments.models import Experiment, FrozenMatrixCell, MatrixOutcome
+from adr_forge.experiments.models import Experiment, ExperimentAccounting, FrozenMatrixCell, MatrixOutcome
 
 
 class BenchmarkRunner:
@@ -22,7 +22,7 @@ class BenchmarkRunner:
         self,
         experiment: Experiment,
         execute: Callable[[FrozenMatrixCell], Awaitable[MatrixOutcome | str]],
-    ) -> dict[str, int | object]:
+    ) -> ExperimentAccounting:
         for cell in self.missing_cells(experiment):
             try:
                 outcome = MatrixOutcome(await execute(cell))

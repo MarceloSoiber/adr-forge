@@ -31,9 +31,9 @@ def detect_contamination(
     by_group: dict[str, set[DatasetSplit]] = defaultdict(set)
     for member in members:
         by_group[member.lineage_group_id].add(member.split)
-    for group, splits in sorted(by_group.items()):
+    for lineage_group, splits in sorted(by_group.items()):
         if DatasetSplit.EVALUATION in splits and splits - {DatasetSplit.EVALUATION}:
-            findings.append(ContaminationFinding("lineage_split_leak", True, (), group))
+            findings.append(ContaminationFinding("lineage_split_leak", True, (), lineage_group))
     if examples is None:
         return findings
     by_hash: dict[str, list[DatasetExample]] = defaultdict(list)
@@ -42,13 +42,13 @@ def detect_contamination(
         by_hash[example.content_hash].append(example)
         by_normalised[_normalise(example.prompt + example.completion)].append(example)
     for kind, groups in (("exact_duplicate", by_hash), ("normalized_duplicate", by_normalised)):
-        for group in groups.values():
-            if len(group) > 1:
+        for duplicate_examples in groups.values():
+            if len(duplicate_examples) > 1:
                 findings.append(
                     ContaminationFinding(
                         kind,
                         True,
-                        tuple(sorted(str(item.id) for item in group)),
+                        tuple(sorted(str(item.id) for item in duplicate_examples)),
                         "duplicate example content",
                     )
                 )

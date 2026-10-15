@@ -33,6 +33,7 @@ dev = [
   "pytest-cov>=6,<7",
   "respx>=0.22,<1",
   "ruff>=0.9,<1",
+  "types-PyYAML>=6.0.12.20250915",
 ]
 ml = [
   "accelerate>=1.2,<2",

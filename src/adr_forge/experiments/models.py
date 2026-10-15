@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 from enum import StrEnum
+from typing import cast
 from uuid import UUID, uuid4
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -47,7 +48,7 @@ class ExperimentAccounting(BaseModel):
     status: ExperimentStatus
 
     def __getitem__(self, key: str) -> int | ExperimentStatus:
-        return getattr(self, key)
+        return cast(int | ExperimentStatus, getattr(self, key))
 
 
 class Experiment(BaseModel):
