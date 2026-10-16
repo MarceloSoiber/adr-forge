@@ -216,35 +216,35 @@ primary output path.
 
 ### Tests first
 
-- [ ] T094 [P] [US5] Add schema and state tests for dataset examples, review transitions, published-version immutability, and partition membership in `tests/unit/datasets/test_models.py`
-- [ ] T095 [P] [US5] Add hash, exact duplicate, normalized duplicate, lineage-group, and planted cross-split leakage tests in `tests/unit/datasets/test_contamination.py`
-- [ ] T096 [P] [US5] Add provenance, missing license, unauthorized source, unreviewed synthetic, and suspected sensitive-content tests in `tests/unit/datasets/test_governance.py`
-- [ ] T097 [P] [US5] Add CLI tests for dataset validate/build findings, exclusions, exit codes, and immutable manifests in `tests/contract/test_dataset_cli.py`
-- [ ] T098 [P] [US5] Add mocked SFT configuration, completion-only formatting, checkpoint, resume, adapter manifest, and failure cleanup tests in `tests/unit/training/test_sft.py`
-- [ ] T099 [P] [US5] Add an opt-in `gpu` smoke test that records hardware, model revision, effective config, duration, and peak VRAM in `tests/integration/test_qwen_qlora_smoke.py`
+- [X] T094 [P] [US5] Add schema and state tests for dataset examples, review transitions, published-version immutability, and partition membership in `tests/unit/datasets/test_models.py`
+- [X] T095 [P] [US5] Add hash, exact duplicate, normalized duplicate, lineage-group, and planted cross-split leakage tests in `tests/unit/datasets/test_contamination.py`
+- [X] T096 [P] [US5] Add provenance, missing license, unauthorized source, unreviewed synthetic, and suspected sensitive-content tests in `tests/unit/datasets/test_governance.py`
+- [X] T097 [P] [US5] Add CLI tests for dataset validate/build findings, exclusions, exit codes, and immutable manifests in `tests/contract/test_dataset_cli.py`
+- [X] T098 [P] [US5] Add mocked SFT configuration, completion-only formatting, checkpoint, resume, adapter manifest, and failure cleanup tests in `tests/unit/training/test_sft.py`
+- [X] T099 [P] [US5] Add an opt-in `gpu` smoke test that records hardware, model revision, effective config, duration, and peak VRAM in `tests/integration/test_qwen_qlora_smoke.py`
 
 ### Dataset domain and tooling
 
-- [ ] T100 [P] [US5] Implement `DatasetExample` with source type, required license, `pt-BR` language, categories, lineage parents, `draft|under_review|approved|rejected` state, reviewer/time required for terminal review, and content hash in `src/adr_forge/datasets/models.py`
-- [ ] T101 [P] [US5] Implement `DatasetVersion` states `building|validating|published|rejected` and membership in exactly one `train|validation|evaluation` split with lineage group in `src/adr_forge/datasets/versioning.py`
-- [ ] T102 [US5] Define versioned JSON Schemas for examples, ADR targets, manifests, rubrics, and training data in `datasets/schemas/example-v1.json`, `adr-v1.json`, `manifest-v1.json`, and `rubric-v1.json`
-- [ ] T103 [US5] Implement provenance, license, review-state, content-hash, and sensitive-data validators in `src/adr_forge/datasets/governance.py`
-- [ ] T104 [US5] Implement exact/normalized duplicate detection and lineage-family split blocking, with semantic candidates reported for human review rather than silently rejected, in `src/adr_forge/datasets/contamination.py`
-- [ ] T105 [US5] Implement canonical prompt-completion formatting with assistant-only loss metadata and exclusion reporting in `src/adr_forge/datasets/builder.py`
-- [ ] T106 [US5] Implement `adr-forge dataset validate` and `adr-forge dataset build` in `src/adr_forge/cli/dataset.py`
-- [ ] T107 [P] [US5] Author 25 Portuguese SQL-versus-NoSQL scenarios containing complete, incomplete, contradictory, simple-wins, and adversarial cases in `datasets/public/sql-vs-nosql.jsonl`
-- [ ] T108 [P] [US5] Author 25 Portuguese synchronous-versus-asynchronous scenarios containing complete, incomplete, contradictory, simple-wins, and adversarial cases in `datasets/public/sync-vs-async.jsonl`
-- [ ] T109 [P] [US5] Author 25 Portuguese modular-monolith-versus-microservices scenarios containing complete, incomplete, contradictory, simple-wins, and adversarial cases in `datasets/public/monolith-vs-microservices.jsonl`
-- [ ] T110 [P] [US5] Author 25 Portuguese containers-versus-serverless-versus-traditional scenarios containing complete, incomplete, contradictory, simple-wins, and adversarial cases in `datasets/public/runtime-options.jsonl`
-- [ ] T111 [US5] Review all 100 examples, attach source/license/lineage metadata, approve or reject each, define fixed evaluation families before synthetic expansion, and publish `datasets/manifests/v0.1.0.json`
+- [X] T100 [P] [US5] Implement `DatasetExample` with source type, required license, `pt-BR` language, categories, lineage parents, `draft|under_review|approved|rejected` state, reviewer/time required for terminal review, and content hash in `src/adr_forge/datasets/models.py`
+- [X] T101 [P] [US5] Implement `DatasetVersion` states `building|validating|published|rejected` and membership in exactly one `train|validation|evaluation` split with lineage group in `src/adr_forge/datasets/versioning.py`
+- [X] T102 [US5] Define versioned JSON Schemas for examples, ADR targets, manifests, rubrics, and training data in `datasets/schemas/example-v1.json`, `adr-v1.json`, `manifest-v1.json`, and `rubric-v1.json`
+- [X] T103 [US5] Implement provenance, license, review-state, content-hash, and sensitive-data validators in `src/adr_forge/datasets/governance.py`
+- [X] T104 [US5] Implement exact/normalized duplicate detection and lineage-family split blocking, with semantic candidates reported for human review rather than silently rejected, in `src/adr_forge/datasets/contamination.py`
+- [X] T105 [US5] Implement canonical prompt-completion formatting with assistant-only loss metadata and exclusion reporting in `src/adr_forge/datasets/builder.py`
+- [X] T106 [US5] Implement `adr-forge dataset validate` and `adr-forge dataset build` in `src/adr_forge/cli/dataset.py`
+- [X] T107 [P] [US5] Author 25 Portuguese SQL-versus-NoSQL scenarios containing complete, incomplete, contradictory, simple-wins, and adversarial cases in `datasets/public/sql-vs-nosql.jsonl`
+- [X] T108 [P] [US5] Author 25 Portuguese synchronous-versus-asynchronous scenarios containing complete, incomplete, contradictory, simple-wins, and adversarial cases in `datasets/public/sync-vs-async.jsonl`
+- [X] T109 [P] [US5] Author 25 Portuguese modular-monolith-versus-microservices scenarios containing complete, incomplete, contradictory, simple-wins, and adversarial cases in `datasets/public/monolith-vs-microservices.jsonl`
+- [X] T110 [P] [US5] Author 25 Portuguese containers-versus-serverless-versus-traditional scenarios containing complete, incomplete, contradictory, simple-wins, and adversarial cases in `datasets/public/runtime-options.jsonl`
+- [X] T111 [US5] Review all 100 examples, attach source/license/lineage metadata, approve or reject each, define fixed evaluation families before synthetic expansion, and publish `datasets/manifests/v0.1.0.json`
 
 ### QLoRA training
 
-- [ ] T112 [P] [US5] Define pinned model identity and smoke/full QLoRA configurations without guessed capacity claims in `configs/models/qwen3-4b-instruct-2507.yaml`, `configs/training/qwen3-4b-smoke.yaml`, and `configs/training/qwen3-4b-full.yaml`
-- [ ] T113 [US5] Implement training configuration validation, effective-config capture, completion-only `SFTTrainer`, PEFT LoRA, 4-bit bitsandbytes loading, checkpoints, resume, and adapter manifest in `src/adr_forge/training/sft.py`
-- [ ] T114 [US5] Implement exclusive GPU/disk preflight and atomic training-run artifact lifecycle in `src/adr_forge/training/service.py`
-- [ ] T115 [US5] Implement `adr-forge train sft` progress, cancellation handling, human/JSON output, and documented exit codes in `src/adr_forge/cli/train.py`
-- [ ] T116 [US5] Register a fine-tuned strategy from a verified adapter manifest and reject base-model/revision mismatches in `src/adr_forge/strategies/fine_tuned.py`
+- [X] T112 [P] [US5] Define pinned model identity and smoke/full QLoRA configurations without guessed capacity claims in `configs/models/qwen3-4b-instruct-2507.yaml`, `configs/training/qwen3-4b-smoke.yaml`, and `configs/training/qwen3-4b-full.yaml`
+- [X] T113 [US5] Implement training configuration validation, effective-config capture, completion-only `SFTTrainer`, PEFT LoRA, 4-bit bitsandbytes loading, checkpoints, resume, and adapter manifest in `src/adr_forge/training/sft.py`
+- [X] T114 [US5] Implement exclusive GPU/disk preflight and atomic training-run artifact lifecycle in `src/adr_forge/training/service.py`
+- [X] T115 [US5] Implement `adr-forge train sft` progress, cancellation handling, human/JSON output, and documented exit codes in `src/adr_forge/cli/train.py`
+- [X] T116 [US5] Register a fine-tuned strategy from a verified adapter manifest and reject base-model/revision mismatches in `src/adr_forge/strategies/fine_tuned.py`
 
 **Checkpoint**: The first adapter, dataset, and benchmark can be reproduced from published manifests.
 

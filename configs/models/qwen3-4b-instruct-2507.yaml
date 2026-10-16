@@ -1,0 +1,6 @@
+# Immutable Hugging Face identity used for every QLoRA run.  The revision is a
+# resolved commit, not a branch or a display-name alias.
+model_id: Qwen/Qwen3-4B-Instruct-2507
+model_revision: cdbee75f17c01a7cc42f958dc650907174af0554
+trust_remote_code: false
+use_safetensors: true

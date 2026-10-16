@@ -49,6 +49,11 @@ checkpoints/
 *.pt
 *.pth
 
+# Versioned model descriptors are configuration, not model weights.
+!configs/models/
+!configs/models/*.yaml
+configs/models/.gitkeep
+
 # Private experiment material
 datasets/private/
 snapshots/private/

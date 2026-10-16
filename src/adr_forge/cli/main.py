@@ -6,6 +6,7 @@ from adr_forge.cli.benchmark_report import benchmark_report
 from adr_forge.cli.benchmark_run import benchmark_run
 from adr_forge.cli.dataset import dataset_build, dataset_validate
 from adr_forge.cli.doctor import doctor
+from adr_forge.cli.train import train_sft
 
 app = typer.Typer(
     name="adr-forge",
@@ -29,6 +30,10 @@ dataset = typer.Typer(help="Validate and build governed training datasets.")
 dataset.command("validate")(dataset_validate)
 dataset.command("build")(dataset_build)
 app.add_typer(dataset, name="dataset")
+
+train = typer.Typer(help="Run guarded local model training.")
+train.command("sft")(train_sft)
+app.add_typer(train, name="train")
 
 
 if __name__ == "__main__":
