@@ -553,3 +553,122 @@ broken history.
 - Hard-code score bounds only in React/OpenAPI: rejected because multiple implementations could
   drift and the recorded rubric would not be reproducible.
 - Rename existing migrations: rejected because merged migration history is immutable.
+
+## Phase 8 Hardening and Release-Evidence Refinements
+
+### Decision 31 — Use SQLite's online backup API and verify the finished copy
+
+**Decision**: Create backups through SQLite's online backup API against a live source connection,
+write the database to a sibling temporary file, run `PRAGMA integrity_check` on that copy, hash and
+size the completed bytes, then atomically publish the database and a canonical JSON manifest. The
+manifest records format version, UTC timestamp, source schema revision, database size and SHA-256,
+and the application version. Existing outputs are never overwritten.
+
+**Rationale**: Copying a WAL-mode database file can omit committed WAL pages. The online backup API
+provides one consistent snapshot without stopping the local application, while verification and
+atomic publication prevent a partial or corrupt copy from being presented as recovery evidence.
+
+**Alternatives considered**:
+
+- Copy the `.db`, `-wal`, and `-shm` files: rejected because timing and restore handling are fragile.
+- Run `VACUUM INTO`: viable for a compact export, but rejected as the primary path because the
+  backup API has explicit snapshot semantics and supports injected failure tests.
+- Add a restore command: deferred; Phase 8 proves restore into an isolated temporary location and
+  never overwrites the configured live database.
+
+### Decision 32 — Keep prune selection, deletion, and audit explicit and conservative
+
+**Decision**: `artifacts list` is read-only. `artifacts prune` first builds a deterministic candidate
+set containing only unreferenced `prunable` artifacts and expired unreferenced `temporary`
+artifacts. Without `--confirm` it performs no mutation and returns a failed-precondition result.
+With confirmation, each successfully deleted artifact gets an append-only audit row containing the
+operation ID, artifact identity/hash/path, reclaimed bytes, reason, and UTC time. Missing bytes are
+audited as zero reclaimed bytes; metadata or files that fail deletion remain catalogued and are
+reported, so the command may not overstate reclaimed space.
+
+**Rationale**: Physical cleanup crosses database and filesystem boundaries and cannot be one atomic
+transaction. A conservative per-item record makes partial failure honest and repeatable while
+preserving the reference registry as the deletion authority.
+
+**Alternatives considered**:
+
+- Delete all non-`keep` artifacts: rejected because retention does not override live references.
+- Remove catalog rows before bytes: rejected because a filesystem failure would orphan untracked
+  bytes and erase the retry target.
+- Introduce a generic audit framework: rejected because only destructive artifact cleanup currently
+  requires this record; a narrow append-only entity is sufficient.
+
+### Decision 33 — Make security controls executable at their owning boundaries
+
+**Decision**: Add CPU-only adversarial tests at the existing configuration, logging/error,
+artifact-store, retrieval prompt-rendering, request/schema, and model-config boundaries. Tests use
+sentinel secrets and prompt-injection strings and assert both rejection/isolation and absence from
+logs, problem details, CLI JSON, reports, and snapshots. Request/context limits are exercised just
+below and above their configured boundaries; unsafe model settings fail before import, download,
+network access, or GPU allocation.
+
+**Rationale**: One end-to-end security test would identify a failure but not establish which trust
+boundary owns the invariant. Exercising existing public boundaries gives actionable evidence
+without creating a parallel security policy implementation.
+
+**Alternatives considered**:
+
+- Add a new centralized security service: rejected because redaction, path safety, prompt isolation,
+  size limits, and model loading have different owners and already expose testable boundaries.
+- Treat prompt injection as a model-quality benchmark only: rejected because privileged prompt
+  separation and no tool execution are application security contracts.
+
+### Decision 34 — Validate API compatibility from the committed OpenAPI contract
+
+**Decision**: The CPU CI gate parses the committed OpenAPI document, obtains the FastAPI schema
+without starting a network server, and compares normalized operations and request/response schemas.
+Breaking drift fails the build; formatting and implementation-only metadata are normalized away.
+The same compatibility command runs in GitHub Actions and the future GitLab pipeline.
+
+**Rationale**: The committed contract is the consumer-facing authority. Offline comparison is
+deterministic, avoids port races, and prevents either CI provider from silently applying a weaker
+API gate.
+
+**Alternatives considered**:
+
+- Regenerate and commit the contract on every build: rejected because silent regeneration can hide
+  an unreviewed breaking change.
+- Compare raw YAML/JSON text: rejected because ordering and description-only changes create noise.
+
+### Decision 35 — Treat local performance as a regression baseline, not a capacity claim
+
+**Decision**: Run 100 scenarios with fake strategies, temporary SQLite, and temporary artifacts;
+capture environment identity plus wall-clock duration and per-stage latency for queue/progress,
+persistence, report generation, and artifact operations. Assert completeness, no resource leaks,
+and deliberately generous regression ceilings; publish measured values rather than extrapolating
+Qwen latency or multi-user capacity.
+
+**Rationale**: Fake workloads can expose orchestration and storage regressions in CPU CI but cannot
+support claims about GPU inference or production throughput. Separating measured overhead from
+model smoke evidence keeps portfolio claims honest.
+
+**Alternatives considered**:
+
+- Enforce the 90-second model target with a fake runtime: rejected because it measures the wrong
+  workload.
+- Add a load-testing service: rejected because the supported scope is one local user and one GPU
+  workload.
+
+### Decision 36 — Publish release evidence only from immutable, fully accounted inputs
+
+**Decision**: T125 records an opt-in local baseline and QLoRA smoke result whether successful,
+skipped for a declared prerequisite, or failed at preflight/execution. T126 consumes the fixed
+dataset/strategy/rubric/config identities, reports every expected cell as completed, failed,
+partial, cancelled, or excluded, and separates deterministic from human scores. T127 cites only
+measured results from those reports and states limitations. Private artifacts and secrets remain
+outside Git; reports contain hashes and reproduction commands rather than sensitive contents.
+
+**Rationale**: A polished README must not turn optional or failed experiments into unsupported
+claims. Immutable identities and complete accounting make the portfolio evidence independently
+reviewable while respecting the local privacy boundary.
+
+**Alternatives considered**:
+
+- Publish only successful runs: rejected because it violates honest experiment accounting.
+- Commit adapters, raw private snapshots, or model caches for convenience: rejected because they
+  exceed the Git and privacy boundary.

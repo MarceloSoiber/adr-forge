@@ -383,6 +383,35 @@ metadata. The artifact service treats unknown owner types as invalid and refuses
 while any reference exists. The registry allows the foundational artifact service to enforce safe
 deletion before later owner tables are introduced.
 
+## ArtifactPruneAudit
+
+| Field | Type | Constraints |
+| --- | --- | --- |
+| `id` | UUID | Primary key |
+| `operation_id` | UUID | Groups one confirmed prune invocation |
+| `artifact_id` | UUID | Identity selected from the catalog; retained as audit data after deletion |
+| `artifact_kind` | enum | Snapshot of the deleted artifact kind |
+| `relative_path` | string | Validated catalog path at selection time |
+| `sha256` | string | 64 lowercase hexadecimal characters |
+| `reason` | enum | `unreferenced_prunable`, `expired_temporary`, `missing_bytes` |
+| `reclaimed_bytes` | integer | Non-negative; zero when bytes were already absent |
+| `pruned_at` | timestamp | Required, timezone-aware UTC |
+
+Rows are append-only. One artifact may appear at most once in a successful prune operation. A
+failed filesystem deletion creates no success audit and leaves the artifact catalog row available
+for retry. Audit insertion and removal of the successfully deleted catalog row commit together;
+the command reports any filesystem/database boundary failure without claiming its bytes.
+
+## DatabaseBackupManifest
+
+`DatabaseBackupManifest` is a versioned canonical JSON sidecar, not a SQLite table, because its
+purpose is to verify a database independently of the source database. It contains
+`manifest_version`, `created_at`, `schema_revision`, `database_size_bytes`, `database_sha256`, and
+`application_version`. The hash covers the finalized backup bytes, never the manifest itself.
+Restore validation rejects a size/hash mismatch, a failed SQLite integrity check, or a schema
+revision newer than the validating application. Phase 8 restores only to an isolated temporary
+path and never replaces the configured live database.
+
 ## Indexes
 
 - Scenario revision unique indexes on `(scenario_id, revision_number)` and
@@ -392,6 +421,7 @@ deletion before later owner tables are introduced.
 - Dataset membership indexes on `(dataset_version_id, split)` and `lineage_group_id`.
 - Artifact unique index on `(sha256, kind)` and index on retention.
 - Artifact-reference index on `(artifact_id, owner_type)`.
+- Artifact-prune-audit indexes on `(operation_id, pruned_at)` and `artifact_id`.
 - Retrieval snapshot unique index on `content_hash` and indexes on `(provider, created_at)` and
   `artifact_id`.
 - Rubric version unique indexes on `(name, version)` and `content_hash`.
