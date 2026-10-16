@@ -83,6 +83,7 @@ class _FakeTrainer:
     def save_adapter(self, target: Path) -> None:
         target.mkdir(parents=True, exist_ok=True)
         (target / "adapter_model.safetensors").write_bytes(b"adapter")
+        (target / "adapter_config.json").write_text('{"r": 8}', encoding="utf-8")
 
 
 def _trainer_factory(
@@ -119,22 +120,69 @@ def test_sft_writes_atomic_checkpoint_and_hashed_adapter_manifest(tmp_path: Path
     }
     assert manifest["adapter"]["sha256"] == result.adapter_sha256
     assert len(result.adapter_sha256) == 64
+    assert [item["path"] for item in manifest["adapter"]["files"]] == [
+        "adapter_config.json",
+        "adapter_model.safetensors",
+    ]
     assert manifest["effective_config"]["lora_rank"] == 8
 
 
 def test_sft_resumes_from_latest_complete_checkpoint(tmp_path: Path) -> None:
-    from adr_forge.training.sft import run_sft
+    from adr_forge.training.sft import (
+        _config_hash,
+        _record_complete_checkpoints,
+        _sha256_file,
+        run_sft,
+    )
 
     dataset = tmp_path / "training.jsonl"
     dataset.write_text('{"prompt": "P", "completion": "C"}\n', encoding="utf-8")
     checkpoint = tmp_path / "output" / "checkpoints" / "checkpoint-9"
     checkpoint.mkdir(parents=True)
     (checkpoint / "trainer_state.json").write_text('{"step": 9}', encoding="utf-8")
+    config = _config(tmp_path)
+    _record_complete_checkpoints(checkpoint.parents[1], _config_hash(config, _sha256_file(dataset)))
     holder: dict[str, _FakeTrainer] = {}
 
-    run_sft(_config(tmp_path), trainer_factory=_trainer_factory(holder), resume=True)
+    run_sft(config, trainer_factory=_trainer_factory(holder), resume=True)
 
     assert holder["trainer"].resume_from_checkpoint == checkpoint
+
+
+def test_sft_rejects_incompatible_or_incomplete_resume_checkpoint(tmp_path: Path) -> None:
+    from adr_forge.training.sft import SFTExecutionError, run_sft
+
+    dataset = tmp_path / "training.jsonl"
+    dataset.write_text('{"prompt": "P", "completion": "C"}\n', encoding="utf-8")
+    checkpoint = tmp_path / "output" / "checkpoints" / "checkpoint-10"
+    checkpoint.mkdir(parents=True)
+    (checkpoint / "trainer_state.json").write_text('{"step": 10}', encoding="utf-8")
+
+    with pytest.raises(SFTExecutionError, match="compatible complete checkpoint"):
+        run_sft(_config(tmp_path), trainer_factory=_trainer_factory({}), resume=True)
+
+
+def test_load_sft_config_resolves_the_pinned_model_descriptor(tmp_path: Path) -> None:
+    from adr_forge.training.sft import load_sft_config
+
+    model = tmp_path / "model.yaml"
+    model.write_text(
+        "model_id: Qwen/Qwen3-4B-Instruct-2507\nmodel_revision: 1234567\n"
+        "trust_remote_code: false\nuse_safetensors: true\n",
+        encoding="utf-8",
+    )
+    config = tmp_path / "run.yaml"
+    config.write_text(
+        "model_config: model.yaml\ndataset_path: data.jsonl\noutput_dir: artifacts\n"
+        "max_seq_length: 128\nseed: 1\nsave_steps: 1\nlora_rank: 8\nlora_alpha: 16\n"
+        "lora_dropout: 0.0\nload_in_4bit: true\n",
+        encoding="utf-8",
+    )
+
+    resolved = load_sft_config(config)
+
+    assert resolved.model_revision == "1234567"
+    assert resolved.dataset_path == (tmp_path / "data.jsonl").resolve()
 
 
 def test_sft_failure_cleans_temporary_adapter_and_never_publishes_manifest(tmp_path: Path) -> None:

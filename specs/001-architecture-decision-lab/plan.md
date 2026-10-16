@@ -1,6 +1,6 @@
 # Implementation Plan: Architecture Decision Lab
 
-**Branch**: `feat/6-phase-5-compare-modeling-strategies` | **Date**: 2026-10-14 | **Spec**: [spec.md](spec.md)
+**Branch**: `feat/8-phase-7-curate-trustworthy-experiment-data` | **Date**: 2026-10-15 | **Spec**: [spec.md](spec.md)
 
 **Input**: Feature specification from `specs/001-architecture-decision-lab/spec.md`
 
@@ -916,3 +916,274 @@ Phase 5 is complete only when T059–T076 and all conditions below hold together
 | Partial rubric scores unlock reveal | Validate the complete rubric matrix and commit evaluation plus reveal eligibility atomically |
 | A correction overwrites the first judgment | Append-only superseding result with one current head and stale-parent conflict |
 | Snapshot metadata commits without durable bytes | Publish/hash artifact first, then commit metadata/reference; reconcile abandoned unreferenced bytes safely |
+
+## Phase 7 Development Plan — Trustworthy Dataset Curation and QLoRA Training
+
+### Outcome and Boundary
+
+Phase 7 delivers tasks T094–T116 and closes User Story 5. A practitioner can validate and publish
+an immutable, reviewed Portuguese dataset whose provenance, licensing, lineage, partitions, and
+content hashes are auditable; build canonical completion-only SFT input; train or resume one local
+Qwen3-4B QLoRA adapter through a guarded foreground CLI; and register the resulting adapter as an
+available fine-tuned strategy only after its manifest and base-model compatibility are verified.
+
+The required CI path remains CPU-only. Dataset policy, schemas, canonical building, CLI behavior,
+training configuration, checkpoint/resume orchestration, manifest hashing, cleanup, and adapter
+verification use fixtures and a fake trainer. Actual model loading and one QLoRA smoke run are
+explicit local `gpu` gates. This phase does not add dataset editing UI, remote training, model
+download automation, a GPU container, a worker/broker, semantic embedding infrastructure, or a
+second metadata store.
+
+No `NEEDS CLARIFICATION` items remain. The accepted QLoRA stack and local execution constraints are
+recorded in [research.md](research.md) and ADRs
+[0003](../../docs/adrs/0003-qwen-qlora.md),
+[0006](../../docs/adrs/0006-exclusive-gpu-lease.md), and
+[0007](../../docs/adrs/0007-native-gpu-execution.md). Dataset entities and invariants are defined
+in [data-model.md](data-model.md), CLI behavior in [contracts/cli.md](contracts/cli.md), and runnable
+evidence in [quickstart.md](quickstart.md).
+
+### Existing Baseline and Task Mapping
+
+- T094–T098 and T100–T104, T106, and T113 already have partial code or tests in the working
+  branch. Their presence is not completion evidence. Wave 0 audits them against the specification,
+  closes false-positive/false-negative behavior, and keeps the tasks open until their exit evidence
+  passes.
+- T102 is the contract authority for T100–T106 and T111. The JSON Schemas freeze the portable Git
+  representation; Pydantic models may be stricter internally but may not accept a published
+  document rejected by the versioned schema or emit fields absent from it.
+- T102 also creates `datasets/schemas/training-v1.json`. The task names four schema files while
+  requiring five formats; this additional file resolves the training-data contract instead of
+  leaving the canonical builder output implicit.
+- T105 owns canonical transformation and exclusion accounting. T106 is a Typer adapter over the
+  same validation/build services and must not duplicate governance or contamination policy.
+- T107–T110 may be authored in parallel only after the example and ADR schemas are frozen. T111 is
+  a separate human review/publication gate and cannot be inferred from schema validity or generated
+  automatically.
+- T112 freezes model identity and effective configuration before T113–T115. Configuration names
+  such as `smoke` and `full` describe intent, not verified capacity; measured hardware, duration,
+  peak VRAM, and outcome are recorded by the smoke run rather than predicted in YAML comments.
+- T113 owns framework-specific construction and completion-only loss semantics. T114 owns resource
+  preflight, exclusive lease, cancellation, staging, artifact publication, and cleanup. T115 only
+  translates CLI input, progress, result, and stable exit semantics.
+- T116 consumes the final adapter manifest through the existing strategy registry boundary. It
+  does not teach the registry how to train, scan directories, or repair incompatible artifacts.
+- Dataset publication remains Git-manifest based in this phase, as required by the constitution.
+  `DatasetVersion` and membership are immutable domain/manifest values; no new SQLite migration or
+  repository is introduced without a consumer requiring concurrent mutable persistence.
+
+### Delivery Sequence
+
+| Wave | Tasks | Deliverable | Entry dependency | Exit evidence |
+| --- | --- | --- | --- | --- |
+| 0 — Contract and baseline audit | Supports T094–T116 | Frozen example, ADR, manifest, rubric, training-row, adapter-manifest, finding, and CLI shapes; gap report for existing partial code | Phase 6 complete; current schemas, CLI contract, ADRs, and partial tests inspected | Every task maps to one contract and owner; fixtures parse; existing code is classified as reusable, incomplete, or superseded without marking tasks complete |
+| 1 — Tests first | T094–T099 | Domain/state, contamination, governance, dataset CLI, mocked SFT, cleanup/resume, and opt-in GPU tests | Wave 0 shapes frozen | CPU tests fail only for missing Phase 7 behavior; GPU test is collected but skipped by default and declares all required telemetry |
+| 2 — Dataset contracts and policy | T100–T104 | Immutable examples/versions/memberships, versioned JSON Schemas, governance findings, duplicate/lineage analysis, and semantic-review candidates | Wave 1 policy tests present | Schema and property tests prove review transitions, publication immutability, exact split membership, deterministic hashes, fail-closed provenance, sensitive-data review, and cross-split blocking |
+| 3 — Canonical builder and CLI | T105–T106 | One validation pipeline, canonical completion-only JSONL builder, immutable build manifest, complete inclusion/exclusion report, and Typer commands | Wave 2 schemas and findings stable | Contract tests prove deterministic bytes/hashes, no overwrite, no mutation of source manifests, stable exit codes, atomic output, and zero duplicated policy in CLI code |
+| 4 — Curated corpus and publication | T107–T111 | Four balanced 25-example Portuguese source files, independent review records, fixed evaluation families, and `v0.1.0` manifest | Wave 3 validator/build command passes; category authors use frozen schemas | Exactly 100 candidates are accounted for as included or rejected; every published member is approved/licensed; hashes resolve; no exact, normalized, confirmed-semantic, or lineage family leaks into evaluation |
+| 5 — Training configuration and runtime | T112–T113 | Pinned base-model descriptor, smoke/full configs, lazy canonical TRL/PEFT/bitsandbytes trainer, completion-only masking, effective config, checkpoints/resume, and canonical adapter manifest | Wave 3 training-row schema stable; Wave 4 published train/validation splits available for the real run | Fake-trainer tests prove configuration rejection, mask boundaries, deterministic input identity, exact checkpoint selection, resume, multi-file adapter hashing, and failure cleanup without importing ML packages |
+| 6 — Guarded training application | T114–T115 | Disk/GPU preflight, exclusive lease, cancellable foreground service, atomic artifact lifecycle, progress stream, and human/JSON CLI | Wave 5 runtime factory stable; foundational artifact/resource services available | CPU integration/CLI tests prove preflight-before-allocation, one lease, no external process termination, atomic final publication, resumable complete checkpoints, cleanup of incomplete staging, redaction, and documented exits |
+| 7 — Adapter activation | T116 | Verified adapter-manifest loader and fine-tuned/fine-tuned-RAG registry availability | Wave 6 final adapter contract stable | Contract tests reject missing/tampered files, aggregate-hash drift, unsafe paths, wrong model ID/revision, and incomplete manifests; a valid manifest activates only its compatible strategies |
+| 8 — Independent US5 gate | Checkpoint | Published manifest → canonical build → mocked SFT → verified registration, followed by one opt-in local QLoRA smoke | Waves 1–7 | Full CPU gate passes; planted leakage blocks publication; smoke run records pinned inputs, hardware, effective config, duration, peak VRAM, checkpoints, adapter file hashes, and aggregate identity |
+
+Tasks marked `[P]` may proceed concurrently only after Wave 0 freezes their shared formats. The four
+category files have separate owners, while schema, manifest, CLI registration, and strategy
+registry changes remain serialized. Real GPU training starts only after the published dataset gate
+passes; a successful fake trainer run is not evidence that the 12 GB GPU can execute the selected
+configuration.
+
+### Dataset Contract and Governance Rules
+
+- The example schema records stable ID, scenario/target content, source type, source URI when
+  applicable, license or explicit usage authorization, creation method, `pt-BR`, one or more
+  supported categories, all known lineage parents, review status, reviewer/timestamp for terminal
+  reviews, and canonical content hash. Unknown fields fail closed.
+- Native authored examples follow `draft → under_review → approved|rejected`. Terminal review
+  records are immutable. Import compatibility may report malformed legacy records as findings, but
+  may not weaken the native domain constructor or silently promote them into a published version.
+- Canonical hashes are computed from the versioned semantic payload, excluding storage paths,
+  timestamps, reviewer identity, and formatting-only JSON differences. The schema version and hash
+  algorithm are explicit so future formats can coexist without reinterpretation.
+- The manifest assigns each included example exactly once to `train`, `validation`, or fixed
+  `evaluation`; records one lineage group; references exact source-file and target hashes; and
+  freezes its own canonical hash on publication. Rebuilding the same inputs produces byte-identical
+  training rows and identities.
+- Missing/unauthorized license, incomplete provenance, non-approved membership, unreviewed
+  synthetic content, hash mismatch, unresolved sensitive-content finding, or schema failure is
+  blocking. Suspected sensitive data requires human disposition; an automated pattern match never
+  becomes silent approval or silent deletion.
+- Exact and normalized duplicates are deterministic. They block publication when the same content
+  or family crosses into fixed evaluation and are reported within a split for curator cleanup.
+  Lineage is evaluated transitively, not only from direct parents, and cycles or missing parents
+  are blocking manifest defects.
+- Semantic similarity only creates review candidates in this phase; it never silently rejects an
+  example. Publication remains blocked while a cross-split candidate is unresolved. A reviewer
+  either links the examples into one lineage family and repartitions them or records an auditable
+  non-duplicate disposition.
+- Fixed evaluation families are selected before any synthetic expansion. Later derived examples
+  inherit their family and cannot enter training or validation when that family is reserved for
+  evaluation.
+
+### Canonical Build and Publication Rules
+
+- `dataset validate` executes schema, hash, review, provenance/license, privacy, duplicate,
+  lineage, partition, and unresolved-semantic-review checks through one application service. It
+  returns all findings in deterministic order instead of stopping at the first invalid example.
+- `dataset build` accepts only a validation-clean, immutable manifest. It emits canonical JSONL
+  containing the declared prompt/chat representation, assistant completion, schema version,
+  example and lineage identities, and assistant-only loss metadata. Rejected or ineligible records
+  remain visible in a separate exclusion report.
+- Output is written to a sibling temporary path, flushed, hashed, and atomically renamed. Existing
+  output is never overwritten. Failure removes incomplete temporary files while leaving the source
+  manifest untouched.
+- The build manifest records source dataset version/hash, schema versions, ordered member IDs,
+  split counts, included/excluded identities and reasons, exact output-file hashes, builder version,
+  and creation command inputs. Paths are project-relative where practical and never escape the
+  configured roots.
+- The 100 candidates are balanced across the four initial categories: each category starts with
+  five complete, five incomplete, five contradictory, five simple-wins, and five adversarial
+  cases. The initial split target is 20 train, 2 validation, and 3 evaluation candidates per
+  category, subject to moving an entire lineage family together. Rejected candidates remain in
+  accounting and are not backfilled silently; balance is reported after review and never overrides
+  lineage isolation or human rejection.
+
+### QLoRA Runtime and Artifact Rules
+
+- Model configuration pins `Qwen/Qwen3-4B-Instruct-2507` plus one immutable, resolvable revision,
+  safe tensor loading, and `trust_remote_code=false`. Training configuration validates every value
+  before importing Torch or allocating GPU memory and captures the fully resolved effective config.
+- The production trainer is loaded lazily behind the existing narrow trainer boundary. It uses
+  Transformers, TRL `SFTTrainer`, PEFT LoRA, bitsandbytes 4-bit loading, Accelerate, deterministic
+  seeds where supported, and a collator/mask whose loss applies only to assistant completion
+  tokens. Prompt and padding tokens must be demonstrably ignored in tests.
+- The service validates dataset/build hashes and available disk, performs sanitized GPU preflight,
+  then acquires the existing exclusive lease before model allocation. It reports external blockers
+  but never downloads a model implicitly, kills a process, unloads LM Studio, or weakens the lease.
+- A training run uses a unique staging directory. Effective config and input identities are written
+  before execution. Checkpoints become resumable only after their trainer state and file hashes are
+  complete; incomplete checkpoint directories are ignored and removed during reconciliation.
+- Cancellation is cooperative. Failure or cancellation removes incomplete adapter staging and
+  preserves only complete checkpoints and sanitized diagnostics permitted by retention policy.
+  Final adapter publication occurs only after all files are closed, individually hashed, and moved
+  atomically through the artifact service.
+- The adapter manifest includes schema version, base model ID/revision, dataset/build/manifest
+  identities, effective training config hash, code revision, ordered relative adapter files with
+  sizes and SHA-256 hashes, aggregate canonical hash, timestamps, duration, terminal outcome, and
+  measured hardware/peak VRAM when available. Hashing only the first adapter file is invalid.
+- Resume requires the same base model, dataset build, effective configuration, and code-compatible
+  checkpoint contract. A mismatch fails before training; `--resume` never silently starts a new run
+  or overwrites a completed adapter.
+
+### Fine-Tuned Strategy Registration Rules
+
+- The manifest loader validates the closed schema, normalized paths under the artifact root, every
+  declared file size/hash, aggregate hash, and artifact retention before exposing adapter identity.
+- The configured runtime base model ID and immutable revision must exactly match the adapter
+  manifest. Missing revision, aliases, or a GGUF with merely a similar display name do not count as
+  compatible.
+- Registry availability is derived from enabled configuration, verified adapter artifact, matching
+  base runtime, and existing retrieval requirements. Stable reason codes distinguish absent,
+  malformed, tampered, incompatible, and runtime-unavailable adapters.
+- Fine-tuned and fine-tuned-RAG strategies reuse the existing generation and retrieval contracts.
+  Registration adds adapter loading/composition only; it does not bypass `StrategyInput`, snapshot
+  equivalence, raw-output preservation, validation, telemetry, or blind comparison rules.
+
+### Test-First Work per Wave
+
+- T094 exercises legal and illegal review/version transitions, reviewer metadata, category and
+  language bounds, unique membership, publication hash requirements, terminal immutability, and
+  round trips through every versioned schema.
+- T095 uses generated permutations and planted fixtures for exact and normalization-equivalent
+  content, transitive lineage, cycles, missing parents, same-split duplicates, and train/validation
+  versus evaluation leaks. Finding order and blocking severity are deterministic.
+- T096 covers authored, synthetic, and public-derived provenance; missing or incompatible licenses;
+  unreviewed synthetic data; representative CPF/payment/secret/confidential indicators; false-
+  positive disposition; and absence of sensitive values from logs and CLI details.
+- T097 invokes the real Typer application and asserts human/JSON output, stable exit codes
+  `0/2/3/4/1`,
+  complete findings, exclusions, atomic build behavior, immutable inputs/outputs, canonical bytes,
+  and repeatable hashes.
+- T098 injects a fake trainer/resource/artifact boundary to cover config parsing, lazy imports,
+  completion masks, checkpoint completeness and ordering, resume compatibility, cancellation,
+  multi-file adapter manifests, atomic publication, and cleanup after each failure point.
+- T099 is marked `gpu`, opt-in, and excluded from default CI. It uses only the smoke config, records
+  exact model revision and dataset/config hashes, and fails honestly with actionable preflight
+  evidence when local capacity is insufficient.
+- Dataset/training CLI semantics retain the shared contract: `0` success, `2` invalid input or
+  schema/configuration, `3` failed policy/resource precondition, `4` unavailable model/integration,
+  and `1` execution failure or a cooperatively handled cancellation. Progress stays on stderr and
+  the final JSON value on stdout.
+- Schema tests validate both accepted fixtures and deliberately incompatible future/unknown fields.
+  Corpus tests validate every one of the 100 records without requiring a model or network access.
+
+### Phase 7 Constitution Check
+
+| Principle | Phase 7 design evidence | Status |
+| --- | --- | --- |
+| Evidence Before Claims | Curated targets retain facts/assumptions and review metadata; capacity and quality claims require measured smoke/benchmark evidence | PASS |
+| Reproducible and Honest Experiments | Immutable dataset/build/config/model/code identities, complete adapter file hashes, effective config, checkpoints, telemetry, and explicit failures | PASS |
+| Dataset Integrity and Human Review | Approval/license/provenance gates, fixed evaluation families, transitive lineage isolation, sensitive-data disposition, and immutable publication | PASS |
+| Contracts and Tests | Versioned closed schemas, shared validators/builders, stable CLI findings/exits, fake-trainer tests, corpus validation, and opt-in GPU smoke | PASS |
+| Local-First Security and Resource Safety | Native local execution, lazy model load after disk/GPU preflight and exclusive lease, safe paths, redaction, and no external process termination | PASS |
+| Simplicity With Measured Evolution | Git manifests remain the dataset authority; existing artifact/resource/strategy boundaries are reused without a database, broker, remote trainer, or semantic store | PASS |
+
+Post-design review found no constitutional violation. Human semantic review remains intentionally
+manual because automating it would add an unproven model dependency to the publication gate. The
+GPU smoke remains opt-in, but all configuration, policy, artifact, and registration behavior is
+covered by the mandatory CPU-safe gate.
+
+### SOLID Design Review
+
+| Principle | Status | Evidence and proportional decision |
+| --- | --- | --- |
+| SRP | Atendido | Dataset policy stays in `datasets`, ML construction in `training.sft`, resource/artifact orchestration in `training.service`, and presentation in Typer adapters; changes have distinct actors and test boundaries |
+| OCP | Atendido | Versioned schemas/configuration and the existing trainer/strategy boundaries cover the demonstrated variations—fake versus TRL trainer and baseline versus adapter—without a new generic plugin framework |
+| LSP | Atendido with contract gate | Fake and production trainers must satisfy the same train/save/resume/cancel observable contract; shared contract tests prevent production-only strengthening or silent fallback |
+| ISP | Atendido | Dataset commands consume validation/build capabilities, training consumes only resource/artifact/trainer capabilities, and strategy registration consumes only verified adapter metadata |
+| DIP | Atendido | Domain governance is framework-free; high-level training orchestration receives trainer, resource, lease, clock/progress, and artifact boundaries while Torch/TRL/filesystem details stay at the edge |
+
+The proportional recommendation is to keep the existing modular boundaries and complete their
+contracts. Do not add repositories, factories, or provider hierarchies solely for this phase. The
+material correction is to move direct output-directory publication out of the SFT core into the
+artifact-aware training service and to keep CLI policy-free.
+
+### Completion Gate
+
+Phase 7 is complete only when T094–T116 and all conditions below hold together:
+
+1. The published `v0.1.0` manifest and every referenced example/target validate against versioned
+   schemas; all 100 candidates are explicitly approved/included or rejected/excluded with source,
+   authorization, category, language, creation method, lineage, and reviewer evidence.
+2. Exact, normalized, confirmed-semantic, and transitive lineage families cannot cross into fixed
+   evaluation. A planted leak, unresolved semantic candidate, missing parent, cycle, hash mismatch,
+   unreviewed synthetic record, or unresolved sensitive-content finding blocks publication.
+3. A clean manifest builds byte-identical completion-only training artifacts and manifests on
+   repeated CPU runs. Invalid records and exclusions remain visible, sources are unchanged, and no
+   partial or pre-existing output is overwritten.
+4. The mocked SFT pipeline validates pinned inputs before ML import/allocation, masks prompt tokens,
+   resumes only a compatible complete checkpoint, responds to cancellation, publishes all adapter
+   files atomically, and preserves a canonical manifest with no secret or unsafe path.
+5. A fine-tuned strategy remains unavailable until every adapter file/hash and exact base model
+   revision verify. Tampering or mismatch produces a stable unavailable reason and never falls back
+   to another strategy.
+6. Formatting, linting, strict typing, schema validation, dataset/corpus validation, unit/property/
+   contract/integration tests, secret scanning, and the published-manifest-to-fake-adapter vertical
+   slice pass CPU-only without network, model packages, GPU, or live Knowledge Hub.
+7. One opt-in local smoke either completes and records model/dataset/config/code identities,
+   checkpoints, duration, hardware, peak VRAM, and final adapter manifest, or fails at preflight with
+   honest diagnostics. A capacity failure does not invalidate the CPU implementation gate and is
+   not reported as a successful training result.
+
+### Risks and Controls
+
+| Risk | Control |
+| --- | --- |
+| Existing partial files are mistaken for completed tasks | Audit every T094–T116 item against its exit evidence and keep task state tied to passing behavior, not file presence |
+| Evaluation contamination hides behind paraphrase or indirect ancestry | Normalize deterministically, traverse lineage transitively, require semantic-candidate disposition, and reserve evaluation families before expansion |
+| Automated privacy scan creates false confidence | Treat patterns as review triggers, require human disposition, and block unresolved findings without claiming exhaustive detection |
+| Four parallel authors drift from the contract or category balance | Freeze schemas first, validate each file independently, report balance, and centralize final review/publication in T111 |
+| Training configuration exceeds 12 GB VRAM | Validate before allocation, use a small opt-in smoke config, acquire the exclusive lease, measure peak VRAM, and make no unmeasured capacity promise |
+| Optional ML imports break CPU development or CI | Lazy-load the production trainer and exercise orchestration through fakes with ML extras absent |
+| Resume mixes incompatible inputs or silently starts over | Bind checkpoints to exact model, dataset build, config, and code-compatible contract; fail closed on mismatch |
+| Multi-file adapter is only partially hashed or published | Hash every file, derive one canonical aggregate identity, stage under a unique path, and publish atomically through the artifact service |
+| Tampered or wrong-base adapter becomes selectable | Verify closed manifest, safe paths, file sizes/hashes, aggregate hash, retention, and exact model revision before registry activation |
+| CLI, builder, and domain validators diverge | One application validation/build pipeline supplies CLI and tests; adapters contain no governance policy |

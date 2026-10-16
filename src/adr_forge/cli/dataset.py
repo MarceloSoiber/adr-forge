@@ -1,74 +1,23 @@
-"""Governed dataset validation and immutable artifact builds."""
+"""Thin Typer adapter for the shared dataset validation and build pipeline."""
 
 from __future__ import annotations
 
-import hashlib
 import json
 from pathlib import Path
-from typing import Any
 
 import typer
-from pydantic import ValidationError
 
-from adr_forge.datasets.governance import validate_example
-from adr_forge.datasets.models import DatasetExample
+from adr_forge.datasets.builder import (
+    build_training_dataset,
+    load_and_validate_manifest,
+    validation_report,
+)
 
 
 def _emit(payload: dict[str, object], *, json_output: bool) -> None:
-    if json_output:
-        typer.echo(json.dumps(payload, ensure_ascii=False, default=str))
-    else:
-        typer.echo(str(payload))
-
-
-def _load_manifest(path: Path) -> tuple[bytes, list[dict[str, Any]]]:
-    raw = path.read_bytes()
-    document = json.loads(raw)
-    examples = document.get("examples")
-    if not isinstance(examples, list) or not all(isinstance(item, dict) for item in examples):
-        raise ValueError("manifest must contain an examples list")
-    return raw, examples
-
-
-def _to_example(record: dict[str, Any]) -> DatasetExample:
-    """Translate the portable manifest representation into the domain model."""
-    target = record.pop("target", {})
-    content = record.pop("content", None)
-    if content is None:
-        content = record.pop("prompt", "")
-    completion = record.pop("completion", json.dumps(target, ensure_ascii=False, sort_keys=True))
-    return DatasetExample.model_validate({**record, "prompt": content, "completion": completion})
-
-
-def _validate(path: Path) -> tuple[bytes, list[dict[str, Any]], list[dict[str, object]]]:
-    raw, records = _load_manifest(path)
-    findings: list[dict[str, object]] = []
-    for record in records:
-        try:
-            example = _to_example(dict(record))
-        except (ValidationError, ValueError) as exc:
-            findings.append(
-                {
-                    "code": "invalid_example",
-                    "example_id": str(record.get("id", "unknown")),
-                    "detail": str(exc),
-                }
-            )
-            continue
-        for finding in validate_example(example):
-            code = str(finding.code)
-            # Preserve the public CLI vocabulary while retaining compatibility with
-            # the original domain validator name.
-            if code == "synthetic_unreviewed":
-                code = "unreviewed_synthetic"
-            findings.append(
-                {
-                    "code": code,
-                    "example_id": str(example.id),
-                    "detail": finding.detail,
-                }
-            )
-    return raw, records, findings
+    typer.echo(
+        json.dumps(payload, ensure_ascii=False, default=str) if json_output else str(payload)
+    )
 
 
 def dataset_validate(
@@ -77,28 +26,16 @@ def dataset_validate(
 ) -> None:
     """Validate a dataset manifest without modifying it."""
     try:
-        _, records, findings = _validate(manifest)
+        report = validation_report(load_and_validate_manifest(manifest))
     except (OSError, ValueError, json.JSONDecodeError) as exc:
         _emit(
             {"status": "invalid", "findings": [{"code": "invalid_manifest", "detail": str(exc)}]},
             json_output=json_output,
         )
-        raise typer.Exit(code=1) from exc
-
-    excluded_ids = {str(finding["example_id"]) for finding in findings}
-    included = [record for record in records if str(record.get("id")) not in excluded_ids]
-    exclusions = [finding for finding in findings]
-    _emit(
-        {
-            "status": "valid" if not findings else "invalid",
-            "findings": findings,
-            "included": included,
-            "exclusions": exclusions,
-        },
-        json_output=json_output,
-    )
-    if findings:
-        raise typer.Exit(code=1)
+        raise typer.Exit(code=2) from exc
+    _emit(report, json_output=json_output)
+    if report["status"] != "valid":
+        raise typer.Exit(code=3)
 
 
 def dataset_build(
@@ -106,44 +43,22 @@ def dataset_build(
     output: Path = typer.Option(...),  # noqa: B008
     json_output: bool = typer.Option(False, "--json"),
 ) -> None:
-    """Build a JSONL artifact from a valid manifest without mutating the manifest."""
-    if output.exists():
-        typer.echo(f"refusing to overwrite immutable artifact: {output}", err=True)
-        raise typer.Exit(code=3)
-
+    """Build a canonical completion-only JSONL artifact from a valid manifest."""
     try:
-        raw, records, findings = _validate(manifest)
+        validation = load_and_validate_manifest(manifest)
+        if not validation.valid:
+            _emit(validation_report(validation), json_output=json_output)
+            raise typer.Exit(code=3)
+        report = build_training_dataset(validation, output)
+    except FileExistsError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=3) from exc
+    except typer.Exit:
+        raise
     except (OSError, ValueError, json.JSONDecodeError) as exc:
         _emit(
             {"status": "invalid", "findings": [{"code": "invalid_manifest", "detail": str(exc)}]},
             json_output=json_output,
         )
-        raise typer.Exit(code=1) from exc
-    if findings:
-        excluded_ids = {str(finding["example_id"]) for finding in findings}
-        _emit(
-            {
-                "status": "invalid",
-                "findings": findings,
-                "included": [
-                    record for record in records if str(record.get("id")) not in excluded_ids
-                ],
-                "exclusions": findings,
-            },
-            json_output=json_output,
-        )
-        raise typer.Exit(code=1)
-
-    with output.open("x", encoding="utf-8") as artifact:
-        for record in records:
-            artifact.write(json.dumps(record, ensure_ascii=False, sort_keys=True))
-            artifact.write("\n")
-    _emit(
-        {
-            "status": "built",
-            "manifest_hash": hashlib.sha256(raw).hexdigest(),
-            "included": records,
-            "exclusions": [],
-        },
-        json_output=json_output,
-    )
+        raise typer.Exit(code=2) from exc
+    _emit(report, json_output=json_output)

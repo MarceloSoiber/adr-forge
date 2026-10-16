@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
+from pathlib import Path
 from uuid import UUID
 
 from adr_forge.shared.hashing import canonical_sha256
+from adr_forge.strategies.fine_tuned import AdapterVerificationError, verify_adapter_manifest
 from adr_forge.strategies.models import (
     AnalysisStrategy,
     RuntimeKind,
@@ -76,6 +78,7 @@ def default_registry(
     *,
     retrieval_configured: bool = False,
     adapter_artifact_id: UUID | None = None,
+    adapter_manifest_path: Path | None = None,
     adapter_runtime_available: bool = False,
     enabled: Iterable[str] | None = None,
 ) -> StrategyRegistry:
@@ -99,17 +102,11 @@ def default_registry(
             "O provedor de recuperação Knowledge Hub não está configurado.",
         )
     )
-    adapter_availability = (
-        StrategyAvailability(available=True)
-        if adapter_artifact_id is not None and adapter_runtime_available
-        else _unavailable(
-            "adapter_artifact_missing"
-            if adapter_artifact_id is None
-            else "adapter_runtime_unavailable",
-            "Não há um artefato de adaptador compatível configurado."
-            if adapter_artifact_id is None
-            else "O runtime do adaptador configurado não está disponível.",
-        )
+    adapter_availability = _adapter_availability(
+        adapter_artifact_id,
+        adapter_manifest_path,
+        model_revision,
+        adapter_runtime_available,
     )
     return StrategyRegistry(
         [
@@ -194,3 +191,28 @@ def default_registry(
             ),
         ]
     )
+
+
+def _adapter_availability(
+    artifact_id: UUID | None,
+    manifest_path: Path | None,
+    model_revision: str,
+    runtime_available: bool,
+) -> StrategyAvailability:
+    if artifact_id is None or manifest_path is None:
+        return _unavailable(
+            "adapter_artifact_missing", "Não há um artefato de adaptador configurado."
+        )
+    try:
+        verify_adapter_manifest(
+            manifest_path,
+            expected_model_id=QWEN_MODEL_ID,
+            expected_model_revision=model_revision,
+        )
+    except AdapterVerificationError as exc:
+        return _unavailable(str(exc), "O artefato do adaptador não foi verificado.")
+    if not runtime_available:
+        return _unavailable(
+            "adapter_runtime_unavailable", "O runtime do adaptador configurado não está disponível."
+        )
+    return StrategyAvailability(available=True)

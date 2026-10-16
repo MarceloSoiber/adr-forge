@@ -48,7 +48,7 @@ def test_dataset_validate_reports_machine_readable_findings_exclusions_and_exit_
 
     result = CliRunner().invoke(app, ["dataset", "validate", "--manifest", str(manifest), "--json"])
 
-    assert result.exit_code == 1, result.output
+    assert result.exit_code == 3, result.output
     report = json.loads(result.stdout)
     assert report["status"] == "invalid"
     assert report["included"] == []
@@ -110,3 +110,26 @@ def test_dataset_build_rejects_an_existing_output_to_preserve_immutable_artifact
     assert result.exit_code == 3, result.output
     assert output.read_bytes() == original_output
     assert result.stderr
+
+
+def test_dataset_build_emits_canonical_completion_only_rows(tmp_path: Path) -> None:
+    manifest = tmp_path / "approved-manifest.json"
+    example = _example()
+    _write_manifest(manifest, [example])
+    output = tmp_path / "training.jsonl"
+
+    result = CliRunner().invoke(
+        app,
+        ["dataset", "build", "--manifest", str(manifest), "--output", str(output), "--json"],
+    )
+
+    assert result.exit_code == 0, result.output
+    row = json.loads(output.read_text(encoding="utf-8"))
+    assert row == {
+        "schema_version": "v1",
+        "example_id": example["id"],
+        "lineage_parent_ids": [],
+        "prompt": example["content"],
+        "completion": json.dumps(example["target"], ensure_ascii=False, sort_keys=True),
+        "loss_scope": "completion_only",
+    }
