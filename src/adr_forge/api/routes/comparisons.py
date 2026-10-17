@@ -2,14 +2,29 @@
 
 from __future__ import annotations
 
-from typing import Literal, cast
+from typing import Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Request
 from pydantic import BaseModel, ConfigDict, Field
 
 from adr_forge.api.routes.analysis import _run_repository
-from adr_forge.evaluation.models import CandidateRun, RubricDimension, RubricVersion
+from adr_forge.decisions.schemas import (
+    ADRDraft,
+    ADRStatus,
+    Alternative,
+    Assumption,
+    RationaleLink,
+    ReviewTrigger,
+    Risk,
+    UnresolvedQuestion,
+)
+from adr_forge.evaluation.models import (
+    CandidateRun,
+    EvaluationResult,
+    RubricDimension,
+    RubricVersion,
+)
 from adr_forge.evaluation.repository import EvaluationRepository
 from adr_forge.evaluation.service import (
     BlindComparisonService,
@@ -34,10 +49,69 @@ class SubmitEvaluationRequest(BaseModel):
 
     evaluator_id: str = Field(min_length=1, max_length=200)
     evaluator_type: Literal["human", "llm_assisted", "deterministic"] = "human"
+    judge_model_identity: dict[str, str] | None = None
     scores: dict[str, dict[str, int]]
     preference: str
     notes: str | None = Field(default=None, max_length=5000)
     supersedes_evaluation_id: UUID | None = None
+
+
+class BlindedAdrDraft(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    schema_version: str
+    title: str = Field(min_length=3, max_length=200)
+    status: ADRStatus
+    context: list[str] = Field(min_length=1)
+    facts: list[str]
+    assumptions: list[Assumption]
+    unresolved_questions: list[UnresolvedQuestion] = Field(max_length=3)
+    constraints: list[str]
+    alternatives: list[Alternative]
+    decision: str | None
+    rationale: list[RationaleLink]
+    positive_consequences: list[str]
+    negative_consequences: list[str]
+    risks: list[Risk]
+    review_triggers: list[ReviewTrigger]
+    confidence: float = Field(ge=0, le=1)
+    reference_ids: list[str]
+
+
+class BlindedCandidateResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    label: str = Field(pattern=r"^[A-Z][A-Z0-9]{0,7}$")
+    adr: BlindedAdrDraft
+
+
+class BlindComparisonResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    id: UUID
+    candidates: list[BlindedCandidateResponse] = Field(min_length=2)
+    rubric: dict[str, object]
+    evaluated: bool
+    current_evaluation_id: UUID | None
+
+
+class RevealedCandidateResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    label: str
+    run_id: UUID
+    strategy_id: str
+    strategy_version: str
+    retrieval_snapshot_id: UUID | None
+    generation_config_hash: str = Field(pattern=r"^[a-f0-9]{64}$")
+
+
+class ComparisonRevealResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    comparison_id: UUID
+    evaluation_id: UUID
+    candidates: list[RevealedCandidateResponse] = Field(min_length=2)
 
 
 def _repository(request: Request) -> EvaluationRepository:
@@ -48,10 +122,11 @@ def _repository(request: Request) -> EvaluationRepository:
     "/comparisons",
     status_code=201,
     operation_id="createBlindComparison",
+    response_model=BlindComparisonResponse,
 )
 async def create_comparison(
     command: CreateComparisonRequest, request: Request
-) -> dict[str, object]:
+) -> BlindComparisonResponse:
     runs = await _run_repository(request)
     candidates: list[CandidateRun] = []
     for run_id in command.run_ids:
@@ -59,16 +134,18 @@ async def create_comparison(
         adr = await runs.get_adr(str(run_id))
         if run is None or adr is None:
             raise NotFoundError("Completed run and ADR are required.")
+        try:
+            validated_adr = ADRDraft.model_validate(adr)
+        except ValueError as error:
+            raise ValidationError("Completed run has no valid ADR.") from error
         candidates.append(
             CandidateRun(
                 run_id=run_id,
                 scenario_revision_id=run["scenario_revision_id"],
                 status=run["status"],
-                adr={
-                    key: value
-                    for key, value in adr.items()
-                    if key not in {"id", "analysis_run_id", "created_at"}
-                },
+                adr=validated_adr.model_dump(
+                    mode="json", exclude={"id", "analysis_run_id", "created_at"}
+                ),
                 strategy_id=run["strategy_id"],
                 strategy_version=run["strategy_version"],
                 generation_config_hash="0" * 64,
@@ -96,8 +173,9 @@ async def create_comparison(
 @router.get(
     "/comparisons/{comparisonId}",
     operation_id="getBlindComparison",
+    response_model=BlindComparisonResponse,
 )
-async def get_comparison(comparisonId: UUID, request: Request) -> dict[str, object]:
+async def get_comparison(comparisonId: UUID, request: Request) -> BlindComparisonResponse:
     return _blinded(await _comparison(comparisonId, request))
 
 
@@ -105,10 +183,11 @@ async def get_comparison(comparisonId: UUID, request: Request) -> dict[str, obje
     "/comparisons/{comparisonId}/evaluation",
     status_code=201,
     operation_id="submitBlindEvaluation",
+    response_model=EvaluationResult,
 )
 async def submit_evaluation(
     comparisonId: UUID, command: SubmitEvaluationRequest, request: Request
-) -> dict[str, object]:
+) -> EvaluationResult:
     try:
         comparison = await _comparison(comparisonId, request)
         result = comparison.submit(**command.model_dump())
@@ -117,19 +196,23 @@ async def submit_evaluation(
         raise ConflictError(str(error)) from error
     except ValueError as error:
         raise ValidationError(str(error)) from error
-    return cast(dict[str, object], result.model_dump(mode="json"))
+    return result
 
 
-@router.get("/comparisons/{comparisonId}/reveal", operation_id="revealComparisonIdentities")
-async def reveal(comparisonId: UUID, request: Request) -> dict[str, object]:
+@router.get(
+    "/comparisons/{comparisonId}/reveal",
+    operation_id="revealComparisonIdentities",
+    response_model=ComparisonRevealResponse,
+)
+async def reveal(comparisonId: UUID, request: Request) -> ComparisonRevealResponse:
     try:
         value = (await _comparison(comparisonId, request)).reveal()
     except EvaluationRequired as error:
         raise ConflictError(str(error)) from error
-    return {
-        "comparison_id": comparisonId,
-        "evaluation_id": value.evaluation_id,
-        "candidates": [
+    return ComparisonRevealResponse(
+        comparison_id=comparisonId,
+        evaluation_id=value.evaluation_id,
+        candidates=[
             {
                 "label": revealed.label,
                 "run_id": revealed.candidate.run_id,
@@ -140,7 +223,7 @@ async def reveal(comparisonId: UUID, request: Request) -> dict[str, object]:
             }
             for revealed in value.candidates
         ],
-    }
+    )
 
 
 async def _comparison(identity: UUID, request: Request) -> Comparison:
@@ -150,12 +233,12 @@ async def _comparison(identity: UUID, request: Request) -> Comparison:
     return value
 
 
-def _blinded(comparison: Comparison) -> dict[str, object]:
+def _blinded(comparison: Comparison) -> BlindComparisonResponse:
     value = comparison.blinded()
-    return {
-        "id": comparison.id,
-        "candidates": [{"label": item.label, "adr": item.adr} for item in value.candidates],
-        "rubric": comparison.rubric.model_dump(mode="json"),
-        "evaluated": value.evaluated,
-        "current_evaluation_id": comparison.history()[-1].id if comparison.history() else None,
-    }
+    return BlindComparisonResponse(
+        id=comparison.id,
+        candidates=[{"label": item.label, "adr": item.adr} for item in value.candidates],
+        rubric=comparison.rubric.model_dump(mode="json"),
+        evaluated=value.evaluated,
+        current_evaluation_id=comparison.history()[-1].id if comparison.history() else None,
+    )
