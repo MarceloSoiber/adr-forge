@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
+from collections.abc import AsyncIterator
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Request
-from fastapi.responses import Response
+from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field
 
 from adr_forge.artifacts.repository import ArtifactRepository
@@ -42,6 +44,7 @@ class Problem(BaseModel):
 
 
 PROBLEM = {"model": Problem}
+ExportFormat = Literal["markdown", "json"]
 
 
 class CreateScenarioRequest(BaseModel):
@@ -369,14 +372,75 @@ async def stream_analysis_run_events(runId: UUID, request: Request) -> Response:
     repository = await _run_repository(request)
     if await repository.get(str(runId)) is None:
         raise NotFoundError("Analysis run not found")
-    events = await repository.list_events(str(runId))
-    payload = "".join(
-        "event: progress\ndata: "
-        + json.dumps({"run_id": str(runId), **event}, default=str)
-        + "\n\n"
-        for event in events
+    publisher = request.app.state.analysis_executor.progress
+
+    async def event_stream() -> AsyncIterator[str]:
+        """Project durable run state onto a best-effort in-process SSE stream.
+
+        Subscribe before loading the snapshot: any transition committed during the
+        database read wakes the stream, which then replays durable events newer
+        than the emitted snapshot.  The database remains the source of truth.
+        """
+        loop = asyncio.get_running_loop()
+        notifications: asyncio.Queue[None] = asyncio.Queue(maxsize=1)
+
+        def notify(_: object) -> None:
+            def enqueue() -> None:
+                if notifications.empty():
+                    notifications.put_nowait(None)
+
+            loop.call_soon_threadsafe(enqueue)
+
+        unsubscribe = publisher.subscribe(str(runId), notify)
+        try:
+            snapshot = await repository.get(str(runId))
+            if snapshot is None:
+                return
+            last_sequence = snapshot["progress_sequence"]
+            yield _sse_progress(runId, snapshot)
+            if snapshot["status"] in _TERMINAL_RUN_STATUSES:
+                return
+
+            while True:
+                try:
+                    await asyncio.wait_for(notifications.get(), timeout=15)
+                except TimeoutError:
+                    if await request.is_disconnected():
+                        return
+                    yield ": keepalive\n\n"
+                    continue
+                for event in await repository.list_events(str(runId)):
+                    if event["progress_sequence"] <= last_sequence:
+                        continue
+                    last_sequence = event["progress_sequence"]
+                    yield _sse_progress(runId, event)
+                    if event["status"] in _TERMINAL_RUN_STATUSES:
+                        return
+        finally:
+            unsubscribe()
+
+    return StreamingResponse(event_stream(), media_type="text/event-stream")
+
+
+_TERMINAL_RUN_STATUSES = frozenset(
+    status.value
+    for status in (
+        RunStatus.COMPLETED,
+        RunStatus.NEEDS_CLARIFICATION,
+        RunStatus.INVALID_OUTPUT,
+        RunStatus.FAILED,
+        RunStatus.CANCELLED,
+        RunStatus.INTERRUPTED,
     )
-    return Response(payload, media_type="text/event-stream")
+)
+
+
+def _sse_progress(run_id: UUID, event: dict[str, Any]) -> str:
+    return (
+        "event: progress\ndata: "
+        + json.dumps({"run_id": str(run_id), **event}, default=str)
+        + "\n\n"
+    )
 
 
 @router.post(
@@ -426,8 +490,20 @@ async def get_run_adr(runId: UUID, request: Request) -> dict[str, Any]:
 @router.get(
     "/analysis-runs/{runId}/export",
     operation_id="exportRunAdr",
+    summary="Export a validated ADR",
+    description=(
+        "Exports the validated ADR as a Markdown attachment or as the structured JSON document."
+    ),
+    response_class=Response,
     responses={
         200: {
+            "description": "ADR export.",
+            "headers": {
+                "Content-Disposition": {
+                    "description": "Safe local attachment filename for Markdown exports.",
+                    "schema": {"type": "string"},
+                }
+            },
             "content": {
                 "text/markdown": {"schema": {"type": "string"}},
                 "application/json": {"schema": {"$ref": "#/components/schemas/AdrDraft"}},
@@ -437,7 +513,9 @@ async def get_run_adr(runId: UUID, request: Request) -> dict[str, Any]:
         409: PROBLEM,
     },
 )
-async def export_run_adr(runId: UUID, request: Request, format: str = "markdown") -> Response:
+async def export_run_adr(
+    runId: UUID, request: Request, format: ExportFormat = "markdown"
+) -> Response:
     adr = await get_run_adr(runId, request)
     if format == "json":
         return Response(

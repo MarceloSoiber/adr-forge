@@ -40,7 +40,7 @@ def _repository(request: Request) -> EvaluationRepository:
     return EvaluationRepository(request.app.state.session_factory)
 
 
-@router.post("/comparisons", status_code=201)
+@router.post("/comparisons", status_code=201, operation_id="createBlindComparison")
 async def create_comparison(
     command: CreateComparisonRequest, request: Request
 ) -> dict[str, object]:
@@ -85,17 +85,21 @@ async def create_comparison(
     return _blinded(comparison)
 
 
-@router.get("/comparisons/{comparison_id}")
-async def get_comparison(comparison_id: UUID, request: Request) -> dict[str, object]:
-    return _blinded(await _comparison(comparison_id, request))
+@router.get("/comparisons/{comparisonId}", operation_id="getBlindComparison")
+async def get_comparison(comparisonId: UUID, request: Request) -> dict[str, object]:
+    return _blinded(await _comparison(comparisonId, request))
 
 
-@router.post("/comparisons/{comparison_id}/evaluation", status_code=201)
+@router.post(
+    "/comparisons/{comparisonId}/evaluation",
+    status_code=201,
+    operation_id="submitBlindEvaluation",
+)
 async def submit_evaluation(
-    comparison_id: UUID, command: SubmitEvaluationRequest, request: Request
+    comparisonId: UUID, command: SubmitEvaluationRequest, request: Request
 ) -> dict[str, object]:
     try:
-        comparison = await _comparison(comparison_id, request)
+        comparison = await _comparison(comparisonId, request)
         result = comparison.submit(**command.model_dump())
         await _repository(request).append_evaluation(result)
     except EvaluationConflict as error:
@@ -105,14 +109,14 @@ async def submit_evaluation(
     return cast(dict[str, object], result.model_dump(mode="json"))
 
 
-@router.get("/comparisons/{comparison_id}/reveal")
-async def reveal(comparison_id: UUID, request: Request) -> dict[str, object]:
+@router.get("/comparisons/{comparisonId}/reveal", operation_id="revealComparisonIdentities")
+async def reveal(comparisonId: UUID, request: Request) -> dict[str, object]:
     try:
-        value = (await _comparison(comparison_id, request)).reveal()
+        value = (await _comparison(comparisonId, request)).reveal()
     except EvaluationRequired as error:
         raise ConflictError(str(error)) from error
     return {
-        "comparison_id": comparison_id,
+        "comparison_id": comparisonId,
         "evaluation_id": value.evaluation_id,
         "candidates": [
             {

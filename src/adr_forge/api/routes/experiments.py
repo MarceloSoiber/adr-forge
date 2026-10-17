@@ -92,17 +92,17 @@ async def create_experiment_route(
     return _response(experiment)
 
 
-@router.get("/experiments/{experiment_id}", operation_id="getExperiment")
-async def get_experiment(experiment_id: UUID, request: Request) -> dict[str, object]:
-    experiment = await _repository(request).get(experiment_id)
+@router.get("/experiments/{experimentId}", operation_id="getExperiment")
+async def get_experiment(experimentId: UUID, request: Request) -> dict[str, object]:
+    experiment = await _repository(request).get(experimentId)
     if experiment is None:
         raise NotFoundError("Experiment not found.")
     return _response(experiment)
 
 
-@router.get("/experiments/{experiment_id}/runs", operation_id="listExperimentRuns")
-async def get_experiment_runs(experiment_id: UUID, request: Request) -> list[dict[str, object]]:
-    experiment = await _repository(request).get(experiment_id)
+@router.get("/experiments/{experimentId}/runs", operation_id="listExperimentRuns")
+async def get_experiment_runs(experimentId: UUID, request: Request) -> list[dict[str, object]]:
+    experiment = await _repository(request).get(experimentId)
     if experiment is None:
         raise NotFoundError("Experiment not found.")
     return [
@@ -114,9 +114,9 @@ async def get_experiment_runs(experiment_id: UUID, request: Request) -> list[dic
     ]
 
 
-@router.get("/experiments/{experiment_id}/report", operation_id="getExperimentReport")
-async def get_experiment_report(experiment_id: UUID, request: Request) -> dict[str, object]:
-    experiment = await _repository(request).get(experiment_id)
+@router.get("/experiments/{experimentId}/report", operation_id="getExperimentReport")
+async def get_experiment_report(experimentId: UUID, request: Request) -> dict[str, object]:
+    experiment = await _repository(request).get(experimentId)
     if experiment is None:
         raise NotFoundError("Experiment not found.")
     return aggregate_report(experiment, {})

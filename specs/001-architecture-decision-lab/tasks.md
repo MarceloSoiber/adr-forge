@@ -264,7 +264,7 @@ the fixed benchmark. Phase 8 evidence MUST NOT bypass or relabel those prerequis
 - [ ] T120 Add offline normalized generated-versus-committed API compatibility validation against `specs/001-architecture-decision-lab/contracts/api.openapi.yaml` to contract tests and `.github/workflows/ci.yml`
 - [X] T121 [P] Add a CPU-only GitLab test pipeline using fakes and snapshots, with no deployment or production Docker operations, in `.gitlab-ci.yml`
 - [X] T122 Add environment-tagged local performance instrumentation and a fully accounted 100-scenario fake benchmark for progress, SQLite, report, and artifact overhead in `tests/performance/test_local_benchmark.py`
-- [ ] T123 Execute manifest-verified isolated backup/restore, API restart-to-interrupted, persisted-state-before-SSE reconnect, and fault-injected safe-prune recovery tests using disposable roots in `tests/integration/test_recovery.py`
+- [X] T123 Execute manifest-verified isolated backup/restore, API restart-to-interrupted, persisted-state-before-SSE reconnect, and fault-injected safe-prune recovery tests using disposable roots in `tests/integration/test_recovery.py`
 - [X] T124 Run every CPU-safe command in `specs/001-architecture-decision-lab/quickstart.md` and correct documentation or code discrepancies in that file
 - [ ] T125 Run the opt-in local Qwen baseline and QLoRA smoke gates, record hardware/config/results without committing private artifacts in `docs/experiments/0001-local-smoke.md`
 - [ ] T126 Run the first fixed benchmark, preserve all failures/exclusions, and publish an honest reproducibility report in `docs/experiments/0002-baseline-vs-finetuned.md`
