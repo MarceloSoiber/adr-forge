@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Literal
 from uuid import UUID
 
@@ -22,6 +23,8 @@ from adr_forge.decisions.schemas import (
 from adr_forge.evaluation.models import (
     CandidateRun,
     EvaluationResult,
+    EvaluatorType,
+    JudgeModelIdentity,
     RubricDefinition,
     RubricDimension,
     RubricVersion,
@@ -56,11 +59,29 @@ class SubmitEvaluationRequest(BaseModel):
 
     evaluator_id: str = Field(min_length=1, max_length=200)
     evaluator_type: Literal["human", "llm_assisted", "deterministic"]
-    judge_model_identity: dict[str, str] | None = None
+    judge_model_identity: JudgeModelIdentity | None = None
     scores: dict[str, dict[str, int]]
     preference: str
     notes: str | None = Field(default=None, max_length=5000)
     supersedes_evaluation_id: UUID | None = None
+
+
+class EvaluationResultResponse(BaseModel):
+    """Public immutable evaluation projection with explicit response guarantees."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    id: UUID
+    comparison_id: UUID
+    rubric_version_id: UUID
+    evaluator_id: str
+    evaluator_type: EvaluatorType
+    judge_model_identity: JudgeModelIdentity | None = None
+    scores: dict[str, dict[str, int]]
+    preference: str
+    notes: str | None = None
+    supersedes_evaluation_id: UUID | None
+    submitted_at: datetime
 
 
 class BlindedAdrDraft(BaseModel):
@@ -132,9 +153,7 @@ def _repository(request: Request) -> EvaluationRepository:
     response_model=BlindComparison,
     responses={404: PROBLEM, 409: PROBLEM, 422: PROBLEM},
 )
-async def create_comparison(
-    command: CreateComparisonRequest, request: Request
-) -> BlindComparison:
+async def create_comparison(command: CreateComparisonRequest, request: Request) -> BlindComparison:
     runs = await _run_repository(request)
     candidates: list[CandidateRun] = []
     for run_id in command.run_ids:
@@ -192,7 +211,7 @@ async def get_comparison(comparisonId: UUID, request: Request) -> BlindCompariso
     "/comparisons/{comparisonId}/evaluation",
     status_code=201,
     operation_id="submitBlindEvaluation",
-    response_model=EvaluationResult,
+    response_model=EvaluationResultResponse,
     responses={404: PROBLEM, 409: PROBLEM, 422: PROBLEM},
 )
 async def submit_evaluation(

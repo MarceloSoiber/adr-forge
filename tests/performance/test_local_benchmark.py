@@ -34,6 +34,7 @@ def _fake_config() -> dict[str, object]:
         "schema_version": "benchmark-v1",
         "name": "local-overhead-100-scenarios",
         "rubric": {"name": "fake", "version": "1"},
+        "execution": {"runtime": "fake"},
         "generation": {"temperature": 0, "max_new_tokens": 1},
         "strategies": [{"id": "fake-baseline", "version": "1"}],
         "scenarios": [

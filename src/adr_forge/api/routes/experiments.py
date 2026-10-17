@@ -7,7 +7,7 @@ from uuid import UUID
 from fastapi import APIRouter, Request
 from pydantic import BaseModel, ConfigDict, Field
 
-from adr_forge.api.routes.analysis import AnalysisRun, _run_repository, _run_response
+from adr_forge.api.routes.analysis import PROBLEM, AnalysisRun, _run_repository, _run_response
 from adr_forge.evaluation.models import RubricVersion
 from adr_forge.experiments.models import Experiment as DomainExperiment
 from adr_forge.experiments.models import ExperimentStatus
@@ -73,10 +73,9 @@ def _response(experiment: DomainExperiment) -> Experiment:
     status_code=201,
     operation_id="createExperiment",
     response_model=Experiment,
+    responses={422: PROBLEM},
 )
-async def create_experiment_route(
-    command: CreateExperimentRequest, request: Request
-) -> Experiment:
+async def create_experiment_route(command: CreateExperimentRequest, request: Request) -> Experiment:
     experiments = _repository(request)
     rubric: RubricVersion | None = await experiments.get_rubric(command.rubric_version_id)
     if rubric is None:
@@ -118,7 +117,10 @@ async def create_experiment_route(
 
 
 @router.get(
-    "/experiments/{experimentId}", operation_id="getExperiment", response_model=Experiment
+    "/experiments/{experimentId}",
+    operation_id="getExperiment",
+    response_model=Experiment,
+    responses={404: PROBLEM},
 )
 async def get_experiment(experimentId: UUID, request: Request) -> Experiment:
     experiment = await _repository(request).get(experimentId)
@@ -142,7 +144,11 @@ async def get_experiment_runs(experimentId: UUID, request: Request) -> list[dict
     ]
 
 
-@router.get("/experiments/{experimentId}/report", operation_id="getExperimentReport")
+@router.get(
+    "/experiments/{experimentId}/report",
+    operation_id="getExperimentReport",
+    responses={409: PROBLEM},
+)
 async def get_experiment_report(experimentId: UUID, request: Request) -> dict[str, object]:
     experiment = await _repository(request).get(experimentId)
     if experiment is None:

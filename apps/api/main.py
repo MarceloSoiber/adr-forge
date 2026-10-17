@@ -189,12 +189,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 parameters = operation.get("parameters", [])
                 if isinstance(parameters, list) and parameters:
                     operation["parameters"] = [
-                        {
-                            "$ref": f"#/components/parameters/{name[:-2].title()}Id"
-                        }
+                        {"$ref": f"#/components/parameters/{name[:-2].title()}Id"}
                         if isinstance(parameter, dict)
                         and parameter.get("in") == "path"
-                        and (name := parameter.get("name")) in {
+                        and (name := parameter.get("name"))
+                        in {
                             "runId",
                             "scenarioId",
                             "comparisonId",

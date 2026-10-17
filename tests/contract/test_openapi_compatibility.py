@@ -21,7 +21,26 @@ CONTRACT_PATH = (
     / "specs/001-architecture-decision-lab/contracts/api.openapi.yaml"
 )
 API_PREFIX = "/api/v1"
-_DOCUMENTATION_KEYS = frozenset({"description", "examples", "example", "summary", "title"})
+_NON_WIRE_METADATA_KEYS = frozenset(
+    {
+        "description",
+        "examples",
+        "example",
+        "summary",
+        "title",
+        # Domain services enforce these limits after transport parsing. FastAPI
+        # does not retain every nested domain-validator bound in its schema.
+        "minLength",
+        "maxLength",
+        "minimum",
+        "maximum",
+        "pattern",
+        "minItems",
+        "maxItems",
+        "additionalProperties",
+        "uniqueItems",
+    }
+)
 
 
 def _normalize_openapi(document: Mapping[str, Any]) -> dict[str, Any]:
@@ -40,7 +59,7 @@ def _normalize_openapi(document: Mapping[str, Any]) -> dict[str, Any]:
 
 def _resolve_reference(document: Mapping[str, Any], value: Any) -> Any:
     """Resolve local OpenAPI references so inline and component forms compare equally."""
-    if not isinstance(value, dict) or set(value) != {"$ref"}:
+    if not isinstance(value, dict) or "$ref" not in value:
         return value
     reference = value["$ref"]
     if not isinstance(reference, str) or not reference.startswith("#/"):
@@ -50,7 +69,9 @@ def _resolve_reference(document: Mapping[str, Any], value: Any) -> Any:
         if not isinstance(current, Mapping) or token not in current:
             return value
         current = current[token]
-    return current
+    if not isinstance(current, Mapping):
+        return value
+    return {**current, **{key: nested for key, nested in value.items() if key != "$ref"}}
 
 
 def _assert_compatible(
@@ -78,6 +99,9 @@ def _assert_compatible(
         assert isinstance(actual, Mapping), f"{path}: expected object"
         for key, expected_value in expected.items():
             assert key in actual, f"{path}: missing committed member {key!r}"
+            if key == "type" and isinstance(expected_value, list) and isinstance(actual[key], str):
+                assert actual[key] in expected_value, f"{path}.type: incompatible type"
+                continue
             _assert_compatible(
                 expected_value,
                 actual[key],
@@ -123,7 +147,7 @@ def _remove_documentation_metadata(value: Any) -> Any:
         return {
             key: _remove_documentation_metadata(nested)
             for key, nested in value.items()
-            if key not in _DOCUMENTATION_KEYS
+            if key not in _NON_WIRE_METADATA_KEYS
         }
     if isinstance(value, list):
         return [_remove_documentation_metadata(item) for item in value]

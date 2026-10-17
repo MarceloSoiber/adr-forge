@@ -9,9 +9,9 @@ from uuid import UUID
 from fastapi import APIRouter, Request
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from adr_forge.api.problem_details import ProblemDetails
 from adr_forge.artifacts.repository import ArtifactRepository
 from adr_forge.artifacts.store import ArtifactStore
-from adr_forge.api.problem_details import ProblemDetails
 from adr_forge.retrieval.knowledge_hub import KnowledgeHubProvider
 from adr_forge.retrieval.models import (
     RetrievalFilters as DomainRetrievalFilters,

@@ -18,6 +18,15 @@ class EvaluatorType(StrEnum):
     DETERMINISTIC = "deterministic"
 
 
+class JudgeModelIdentity(BaseModel):
+    """Optional identity of the model used by an assisted evaluator."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    model_id: str | None = None
+    model_revision: str | None = None
+
+
 class RubricDimension(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
     key: str = Field(min_length=1)
@@ -133,7 +142,7 @@ class EvaluationResult(BaseModel):
     rubric_version_id: UUID
     evaluator_id: str = Field(min_length=1, max_length=200)
     evaluator_type: EvaluatorType
-    judge_model_identity: dict[str, str] | None = None
+    judge_model_identity: JudgeModelIdentity | None = None
     scores: dict[str, dict[str, int]]
     preference: str
     notes: str | None = Field(default=None, max_length=5000)

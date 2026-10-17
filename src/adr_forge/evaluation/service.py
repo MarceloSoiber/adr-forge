@@ -7,7 +7,13 @@ from uuid import UUID, uuid4
 
 from pydantic import BaseModel, ConfigDict
 
-from adr_forge.evaluation.models import CandidateRun, EvaluationResult, EvaluatorType, RubricVersion
+from adr_forge.evaluation.models import (
+    CandidateRun,
+    EvaluationResult,
+    EvaluatorType,
+    JudgeModelIdentity,
+    RubricVersion,
+)
 
 LabeledCandidate = tuple[str, CandidateRun]
 
@@ -108,7 +114,7 @@ class Comparison:
         evaluator_type: str,
         scores: dict[str, dict[str, int]],
         preference: str,
-        judge_model_identity: dict[str, str] | None = None,
+        judge_model_identity: JudgeModelIdentity | dict[str, str] | None = None,
         notes: str | None = None,
         supersedes_evaluation_id: UUID | None = None,
     ) -> EvaluationResult:

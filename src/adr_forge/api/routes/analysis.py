@@ -30,7 +30,8 @@ from adr_forge.decisions.service import DecisionService
 from adr_forge.experiments.run_models import AnalysisRun as DomainAnalysisRun
 from adr_forge.experiments.run_models import RunStatus
 from adr_forge.experiments.run_repository import RunRepository
-from adr_forge.scenarios.clarification import ClarificationAnswer
+from adr_forge.scenarios.clarification import ClarificationAnswer, ClarificationAnswerReference
+from adr_forge.scenarios.models import DecisionCategory
 from adr_forge.scenarios.repository import ScenarioRepository
 from adr_forge.scenarios.service import CreateRevisionInput, CreateScenarioInput, ScenarioService
 from adr_forge.shared.errors import (
@@ -46,6 +47,8 @@ from adr_forge.system.progress import CancellationToken
 
 
 class Problem(BaseModel):
+    """OpenAPI component for RFC 9457 error responses."""
+
     type: str
     title: str
     status: int
@@ -54,7 +57,10 @@ class Problem(BaseModel):
     request_id: str | None = None
 
 
-PROBLEM = {"model": Problem}
+PROBLEM = {
+    "model": Problem,
+    "content": {"application/problem+json": {"schema": {"$ref": "#/components/schemas/Problem"}}},
+}
 ExportFormat = Literal["markdown", "json"]
 
 
@@ -77,8 +83,8 @@ class ScenarioRevision(BaseModel):
     constraints: list[str]
     desired_qualities: list[str]
     candidate_alternatives: list[str]
-    clarification_answers: list[dict[str, Any]]
-    categories: list[str]
+    clarification_answers: list[ClarificationAnswer]
+    categories: list[DecisionCategory]
     content_hash: str
     created_at: datetime
 
@@ -94,7 +100,7 @@ class CreateRevisionRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     base_revision_number: int = Field(ge=1)
-    clarification_answers: list[dict[str, Any]] = Field(min_length=1, max_length=3)
+    clarification_answers: list[ClarificationAnswerReference] = Field(min_length=1, max_length=3)
 
 
 class CreateAnalysisRunRequest(BaseModel):
@@ -103,6 +109,26 @@ class CreateAnalysisRunRequest(BaseModel):
     strategy_version: str
     retrieval_snapshot_id: UUID | None = None
     experiment_id: UUID | None = None
+
+
+class ValidationFinding(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    code: str
+    path: str
+    severity: Literal["error", "warning"]
+    message: str = Field(max_length=2_000)
+
+
+class OutputValidationAttempt(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    attempt: Literal["original", "repaired"]
+    output_artifact_id: UUID
+    artifact_id: UUID | None = None
+    parse_succeeded: bool
+    schema_version: str | None = None
+    findings: list[ValidationFinding]
 
 
 class AnalysisRun(BaseModel):
@@ -119,7 +145,7 @@ class AnalysisRun(BaseModel):
     stage: str
     progress_percent: int | None = Field(default=None, ge=0, le=100)
     progress_sequence: int = Field(ge=0)
-    validation_attempts: list[dict[str, Any]] = Field(max_length=2)
+    validation_attempts: list[OutputValidationAttempt] = Field(max_length=2)
     raw_output_artifact_id: UUID | None = None
     repaired_output_artifact_id: UUID | None = None
     adr_draft_id: UUID | None = None
@@ -131,6 +157,8 @@ class AnalysisRun(BaseModel):
     peak_vram_mb: int | None = Field(default=None, ge=0)
     created_at: datetime
     updated_at: datetime
+    started_at: datetime | None = None
+    finished_at: datetime | None = None
 
 
 class ProgressEvent(BaseModel):
@@ -185,11 +213,22 @@ def _scenario_response(scenario: Any, revision: Any) -> dict[str, Any]:
 
 
 def _run_response(run: dict[str, Any]) -> dict[str, Any]:
+    validation_attempts = [
+        {
+            "attempt": attempt["attempt"],
+            "output_artifact_id": attempt.get("output_artifact_id", attempt.get("artifact_id")),
+            "artifact_id": attempt.get("artifact_id", attempt.get("output_artifact_id")),
+            "parse_succeeded": attempt["parse_succeeded"],
+            "schema_version": attempt.get("schema_version"),
+            "findings": attempt.get("findings", []),
+        }
+        for attempt in run.get("validation_attempts", [])
+    ]
     return {
         **run,
         "id": str(run["id"]),
         "scenario_revision_id": str(run["scenario_revision_id"]),
-        "validation_attempts": run.get("validation_attempts", []),
+        "validation_attempts": validation_attempts,
     }
 
 

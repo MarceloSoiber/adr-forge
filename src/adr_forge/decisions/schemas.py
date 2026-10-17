@@ -52,9 +52,9 @@ class Alternative(_Schema):
     summary: str = Field(min_length=1)
     viable: bool
     rejection_reason: str | None = None
-    benefits: list[str] = Field(default_factory=list)
-    drawbacks: list[str] = Field(default_factory=list)
-    constraint_ids: list[str] = Field(default_factory=list)
+    benefits: list[str]
+    drawbacks: list[str]
+    constraint_ids: list[str]
 
 
 class RationaleLink(_Schema):
