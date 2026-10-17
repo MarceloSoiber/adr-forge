@@ -110,6 +110,27 @@ class RunRepository:
             run["validation_attempts"] = json.loads(run.pop("validation_attempts_json"))
         return result
 
+    async def list_by_experiment(self, experiment_id: str) -> list[dict[str, Any]]:
+        """Return persisted executions belonging to one immutable experiment."""
+        async with self._session_factory() as session:
+            rows = (
+                (
+                    await session.execute(
+                        text(
+                            "SELECT * FROM analysis_runs WHERE experiment_id = :experiment_id "
+                            "ORDER BY created_at"
+                        ),
+                        {"experiment_id": experiment_id},
+                    )
+                )
+                .mappings()
+                .all()
+            )
+        result = [dict(row) for row in rows]
+        for run in result:
+            run["validation_attempts"] = json.loads(run.pop("validation_attempts_json"))
+        return result
+
     async def list_events(self, run_id: str) -> list[dict[str, Any]]:
         async with self._session_factory() as session:
             rows = (

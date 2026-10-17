@@ -7,6 +7,7 @@ from uuid import UUID
 from fastapi import APIRouter, Request
 from pydantic import BaseModel, ConfigDict, Field
 
+from adr_forge.api.routes.analysis import AnalysisRun, _run_repository, _run_response
 from adr_forge.evaluation.models import RubricVersion
 from adr_forge.experiments.models import Experiment as DomainExperiment
 from adr_forge.experiments.models import ExperimentStatus
@@ -126,17 +127,18 @@ async def get_experiment(experimentId: UUID, request: Request) -> Experiment:
     return _response(experiment)
 
 
-@router.get("/experiments/{experimentId}/runs", operation_id="listExperimentRuns")
+@router.get(
+    "/experiments/{experimentId}/runs",
+    operation_id="listExperimentRuns",
+    response_model=list[AnalysisRun],
+)
 async def get_experiment_runs(experimentId: UUID, request: Request) -> list[dict[str, object]]:
     experiment = await _repository(request).get(experimentId)
     if experiment is None:
         raise NotFoundError("Experiment not found.")
     return [
-        {
-            **cell.model_dump(mode="json"),
-            "status": "missing",
-        }
-        for cell in experiment.matrix
+        _run_response(run)
+        for run in await (await _run_repository(request)).list_by_experiment(str(experimentId))
     ]
 
 
