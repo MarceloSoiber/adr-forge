@@ -8,7 +8,7 @@ from uuid import UUID
 from fastapi import APIRouter, Request
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from adr_forge.api.routes.analysis import _run_repository
+from adr_forge.api.routes.analysis import PROBLEM, _run_repository
 from adr_forge.decisions.schemas import (
     ADRDraft,
     ADRStatus,
@@ -130,6 +130,7 @@ def _repository(request: Request) -> EvaluationRepository:
     status_code=201,
     operation_id="createBlindComparison",
     response_model=BlindComparison,
+    responses={404: PROBLEM, 409: PROBLEM, 422: PROBLEM},
 )
 async def create_comparison(
     command: CreateComparisonRequest, request: Request
@@ -181,6 +182,7 @@ async def create_comparison(
     "/comparisons/{comparisonId}",
     operation_id="getBlindComparison",
     response_model=BlindComparison,
+    responses={404: PROBLEM},
 )
 async def get_comparison(comparisonId: UUID, request: Request) -> BlindComparison:
     return _blinded(await _comparison(comparisonId, request))
@@ -191,6 +193,7 @@ async def get_comparison(comparisonId: UUID, request: Request) -> BlindCompariso
     status_code=201,
     operation_id="submitBlindEvaluation",
     response_model=EvaluationResult,
+    responses={404: PROBLEM, 409: PROBLEM, 422: PROBLEM},
 )
 async def submit_evaluation(
     comparisonId: UUID, command: SubmitEvaluationRequest, request: Request
@@ -210,6 +213,7 @@ async def submit_evaluation(
     "/comparisons/{comparisonId}/reveal",
     operation_id="revealComparisonIdentities",
     response_model=ComparisonReveal,
+    responses={404: PROBLEM, 409: PROBLEM},
 )
 async def reveal(comparisonId: UUID, request: Request) -> ComparisonReveal:
     try:

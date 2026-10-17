@@ -1,0 +1,1 @@
+{"prompt":"Caso de smoke — Um catálogo transacional mantém produtos, preços e estoque; precisa de consistência e auditoria. SQL ou NoSQL?\nAssistente:","completion":" Escolha SQL relacional. Transações ACID, integridade referencial e consultas de auditoria atendem aos requisitos declarados."}

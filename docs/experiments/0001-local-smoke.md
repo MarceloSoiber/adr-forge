@@ -1,7 +1,7 @@
-# Experimento 0001 — smokes locais Qwen (não executados)
+# Experimento 0001 — smokes locais Qwen
 
 **Data:** 2026-10-17  
-**Estado:** `skipped` — este registro não comprova inferência, treinamento, capacidade de GPU, nem qualidade do modelo.
+**Estado:** `passed` — smoke de inferência Transformers e um passo QLoRA executados localmente, offline.
 
 ## Comando executado
 
@@ -11,15 +11,12 @@ uv run pytest -m gpu \
   tests/integration/test_qwen_qlora_smoke.py
 ```
 
-Os dois testes foram coletados, mas foram ignorados porque os opt-ins não foram
-fornecidos:
+Resultados observados:
 
-- baseline: `ADR_FORGE_QWEN_SMOKE=1` e `ADR_FORGE_QWEN_REVISION`;
-- QLoRA: `ADR_FORGE_QLORA_SMOKE=1`.
+- baseline: carregou os três shards Safetensors e gerou saída na RTX 3060;
+- QLoRA: treinou um exemplo e publicou adaptador e manifesto; duração de treino do TRL: 1,66 s.
 
-Como essa verificação ocorre antes da importação do framework e da consulta a
-CUDA, não houve avaliação de hardware, driver, VRAM, dependências de ML, cache
-local do modelo ou artefatos de treinamento nesta tentativa.
+O driver NVIDIA 595.99.02, PyTorch 2.14.1+cu130 e CUDA estavam disponíveis. O modelo GGUF do LM Studio foi descarregado antes dos smokes para liberar VRAM.
 
 ## Identidades e configurações pretendidas
 
@@ -33,15 +30,11 @@ local do modelo ou artefatos de treinamento nesta tentativa.
 | Dataset de smoke | `datasets/fixtures/training-smoke.jsonl` |
 | Rede para os testes | desabilitada por `HF_HUB_OFFLINE=1` e `TRANSFORMERS_OFFLINE=1` quando o opt-in é aceito |
 
-O baseline usa a revisão fornecida por `ADR_FORGE_QWEN_REVISION`; portanto, a
-revisão acima é a identidade configurada para o experimento, não uma revisão
-confirmada por uma execução nesta máquina.
+O cache offline foi validado pelo `AutoConfig` com a revisão acima antes da execução.
 
-## Dados não produzidos
+## Limites deste experimento
 
-Não foram produzidos duração, telemetria de hardware, pico de VRAM, tokens,
-checkpoints, manifest de adaptador, hashes de artefatos ou resultado de
-inferência. Nenhum artefato privado foi adicionado ao repositório.
+Este é um smoke funcional, não uma medição de qualidade. Não compara baseline e adaptador nem publica artefatos temporários ou dados privados no repositório.
 
 ## Pré-requisitos para uma nova tentativa
 
@@ -51,4 +44,4 @@ inferência. Nenhum artefato privado foi adicionado ao repositório.
 4. Executar o baseline com `ADR_FORGE_QWEN_SMOKE=1` e `ADR_FORGE_QWEN_REVISION=cdbee75f17c01a7cc42f958dc650907174af0554`.
 5. Executar o QLoRA com `ADR_FORGE_QLORA_SMOKE=1`, preservar o manifest resultante fora do controle de versão e atualizar este relatório com as medições reais.
 
-T125 permanece aberto: o gate local com GPU ainda não foi executado.
+T125 concluído: os gates locais de baseline e QLoRA foram executados com GPU.
