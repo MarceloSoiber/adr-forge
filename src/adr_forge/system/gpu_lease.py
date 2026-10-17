@@ -132,7 +132,9 @@ class GpuPreflight:
             blockers.append("gpu_unavailable")
         elif gpu.free_vram_bytes is None or gpu.free_vram_bytes < self._minimum_free_vram_bytes:
             blockers.append("insufficient_vram")
-        if gpu.processes:
+        # Desktop applications routinely hold a small CUDA allocation.  They
+        # cannot meaningfully compete with a local model, whereas an LLM does.
+        if any(process.used_vram_bytes >= 1024**3 for process in gpu.processes):
             blockers.append("external_gpu_processes")
         return PreflightResult(not blockers, tuple(blockers), gpu)
 

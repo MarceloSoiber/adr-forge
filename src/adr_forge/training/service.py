@@ -42,6 +42,7 @@ class TrainingService:
         resume: bool = False,
     ) -> TrainingServiceResult:
         """Validate capacity, acquire the lease, then lazily invoke the SFT core."""
+        config.output_dir.parent.mkdir(parents=True, exist_ok=True)
         disk = shutil.disk_usage(config.output_dir.parent).free
         if disk < self._minimum_free_disk_bytes:
             raise TrainingPreconditionError("insufficient_disk_capacity")

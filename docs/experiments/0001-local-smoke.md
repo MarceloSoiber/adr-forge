@@ -14,7 +14,7 @@ uv run pytest -m gpu \
 Resultados observados:
 
 - baseline: carregou os três shards Safetensors e gerou saída na RTX 3060;
-- QLoRA: treinou um exemplo e publicou adaptador e manifesto; duração de treino do TRL: 1,66 s.
+- QLoRA: treinou um exemplo e publicou adaptador e manifesto; duração total registrada: 16,83 s e pico de VRAM: 4.022.337.536 bytes.
 
 O driver NVIDIA 595.99.02, PyTorch 2.14.1+cu130 e CUDA estavam disponíveis. O modelo GGUF do LM Studio foi descarregado antes dos smokes para liberar VRAM.
 

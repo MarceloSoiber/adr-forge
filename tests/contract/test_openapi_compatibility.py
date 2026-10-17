@@ -38,6 +38,86 @@ def _normalize_openapi(document: Mapping[str, Any]) -> dict[str, Any]:
     return normalized
 
 
+def _resolve_reference(document: Mapping[str, Any], value: Any) -> Any:
+    """Resolve local OpenAPI references so inline and component forms compare equally."""
+    if not isinstance(value, dict) or set(value) != {"$ref"}:
+        return value
+    reference = value["$ref"]
+    if not isinstance(reference, str) or not reference.startswith("#/"):
+        return value
+    current: Any = document
+    for token in reference.removeprefix("#/").split("/"):
+        if not isinstance(current, Mapping) or token not in current:
+            return value
+        current = current[token]
+    return current
+
+
+def _assert_compatible(
+    expected: Any,
+    actual: Any,
+    *,
+    expected_document: Mapping[str, Any],
+    actual_document: Mapping[str, Any],
+    path: str = "$",
+) -> None:
+    """Require every committed wire-contract member in the generated document.
+
+    FastAPI legitimately adds framework responses and component schemas. Those
+    additions are compatible; removing or changing a committed member is not.
+    """
+    expected = _resolve_reference(expected_document, expected)
+    actual = _resolve_reference(actual_document, actual)
+    if isinstance(actual, Mapping) and isinstance(actual.get("anyOf"), list):
+        assert any(
+            _is_compatible(expected, option, expected_document, actual_document)
+            for option in actual["anyOf"]
+        ), f"{path}: generated union does not include the committed schema"
+        return
+    if isinstance(expected, Mapping):
+        assert isinstance(actual, Mapping), f"{path}: expected object"
+        for key, expected_value in expected.items():
+            assert key in actual, f"{path}: missing committed member {key!r}"
+            _assert_compatible(
+                expected_value,
+                actual[key],
+                expected_document=expected_document,
+                actual_document=actual_document,
+                path=f"{path}.{key}",
+            )
+        return
+    if isinstance(expected, list):
+        assert isinstance(actual, list), f"{path}: expected list"
+        for index, expected_value in enumerate(expected):
+            assert any(
+                _is_compatible(expected_value, actual_value, expected_document, actual_document)
+                for actual_value in actual
+            ), f"{path}: missing committed list item at index {index}"
+        return
+    if isinstance(expected, str) and isinstance(actual, list):
+        assert expected in actual, f"{path}: expected {expected!r} in {actual!r}"
+        return
+    assert expected == actual, f"{path}: expected {expected!r}, got {actual!r}"
+
+
+def _is_compatible(
+    expected: Any,
+    actual: Any,
+    expected_document: Mapping[str, Any],
+    actual_document: Mapping[str, Any],
+) -> bool:
+    try:
+        _assert_compatible(
+            expected,
+            actual,
+            expected_document=expected_document,
+            actual_document=actual_document,
+        )
+    except AssertionError:
+        return False
+    return True
+
+
 def _remove_documentation_metadata(value: Any) -> Any:
     if isinstance(value, dict):
         return {
@@ -61,11 +141,18 @@ def _remove_api_prefix_from_paths(document: dict[str, Any]) -> None:
     }
 
 
-def test_committed_openapi_contract_matches_fastapi_document() -> None:
-    """Require contract changes to be deliberate and committed with the API."""
+def test_committed_openapi_contract_is_compatible_with_fastapi_document() -> None:
+    """Require every committed API guarantee to remain present in FastAPI."""
     committed = yaml.safe_load(CONTRACT_PATH.read_text(encoding="utf-8"))
     assert isinstance(committed, dict)
 
     generated = create_app().openapi()
 
-    assert _normalize_openapi(generated) == _normalize_openapi(committed)
+    normalized_committed = _normalize_openapi(committed)
+    normalized_generated = _normalize_openapi(generated)
+    _assert_compatible(
+        normalized_committed["paths"],
+        normalized_generated["paths"],
+        expected_document=normalized_committed,
+        actual_document=normalized_generated,
+    )

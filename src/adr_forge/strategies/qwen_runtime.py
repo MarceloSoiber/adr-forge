@@ -44,6 +44,7 @@ class QwenRuntime(StructuredOutputStrategy):
             from transformers import (
                 AutoModelForCausalLM,
                 AutoTokenizer,
+                BitsAndBytesConfig,
                 StoppingCriteriaList,
             )
         except ImportError as error:
@@ -51,8 +52,17 @@ class QwenRuntime(StructuredOutputStrategy):
         tokenizer = AutoTokenizer.from_pretrained(  # type: ignore[no-untyped-call]
             QWEN_MODEL_ID, revision=self.revision, trust_remote_code=False
         )
+        quantization = BitsAndBytesConfig(  # type: ignore[no-untyped-call]
+            load_in_4bit=True,
+            bnb_4bit_quant_type="nf4",
+            bnb_4bit_use_double_quant=True,
+        )
         model: Any = AutoModelForCausalLM.from_pretrained(
-            QWEN_MODEL_ID, revision=self.revision, trust_remote_code=False, device_map="auto"
+            QWEN_MODEL_ID,
+            revision=self.revision,
+            trust_remote_code=False,
+            device_map="auto",
+            quantization_config=quantization,
         )
         if self.adapter_path is not None:
             try:

@@ -11,6 +11,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from adr_forge.artifacts.repository import ArtifactRepository
 from adr_forge.artifacts.store import ArtifactStore
+from adr_forge.api.problem_details import ProblemDetails
 from adr_forge.retrieval.knowledge_hub import KnowledgeHubProvider
 from adr_forge.retrieval.models import (
     RetrievalFilters as DomainRetrievalFilters,
@@ -22,6 +23,14 @@ from adr_forge.retrieval.repository import RetrievalSnapshotRepository
 from adr_forge.retrieval.service import RetrievalService
 from adr_forge.retrieval.snapshot_provider import SnapshotRetrievalProvider
 from adr_forge.shared.errors import PreconditionFailedError, ValidationError
+
+PROBLEM = {
+    "content": {
+        "application/problem+json": {
+            "schema": ProblemDetails.model_json_schema(),
+        }
+    }
+}
 
 
 class RetrievalFilters(BaseModel):
@@ -126,9 +135,9 @@ def _response(snapshot: DomainRetrievalSnapshot) -> dict[str, object]:
     status_code=201,
     operation_id="createRetrievalSnapshot",
     responses={
-        409: {"description": "Conflict"},
-        422: {"description": "Validation failed"},
-        503: {"description": "Retrieval unavailable"},
+        409: PROBLEM,
+        422: PROBLEM,
+        503: PROBLEM,
     },
 )
 async def create_retrieval_snapshot(

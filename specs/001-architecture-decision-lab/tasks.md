@@ -266,9 +266,9 @@ the fixed benchmark. Phase 8 evidence MUST NOT bypass or relabel those prerequis
 - [X] T122 Add environment-tagged local performance instrumentation and a fully accounted 100-scenario fake benchmark for progress, SQLite, report, and artifact overhead in `tests/performance/test_local_benchmark.py`
 - [X] T123 Execute manifest-verified isolated backup/restore, API restart-to-interrupted, persisted-state-before-SSE reconnect, and fault-injected safe-prune recovery tests using disposable roots in `tests/integration/test_recovery.py`
 - [X] T124 Run every CPU-safe command in `specs/001-architecture-decision-lab/quickstart.md` and correct documentation or code discrepancies in that file
-- [ ] T125 Run the opt-in local Qwen baseline and QLoRA smoke gates, record hardware/config/results without committing private artifacts in `docs/experiments/0001-local-smoke.md`
-- [ ] T126 Run the first fixed benchmark, preserve all failures/exclusions, and publish an honest reproducibility report in `docs/experiments/0002-baseline-vs-finetuned.md`
-- [ ] T127 Expand `README.md` with architecture diagram, setup, safety boundary, dataset methodology, measured results, limitations, and links to the accepted ADRs and experiment reports
+- [X] T125 Run the opt-in local Qwen baseline and QLoRA smoke gates, record hardware/config/results without committing private artifacts in `docs/experiments/0001-local-smoke.md`
+- [X] T126 Run the first fixed benchmark, preserve all failures/exclusions, and publish an honest reproducibility report in `docs/experiments/0002-baseline-vs-finetuned.md`
+- [X] T127 Expand `README.md` with architecture diagram, setup, safety boundary, dataset methodology, measured results, limitations, and links to the accepted ADRs and experiment reports
 
 ---
 

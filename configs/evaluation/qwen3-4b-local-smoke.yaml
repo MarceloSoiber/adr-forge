@@ -1,0 +1,50 @@
+# Opt-in GPU comparison.  It intentionally uses a scenario that is not present
+# in the one-example training fixture, so its result is functional evidence,
+# never a claim of general model quality.
+schema_version: benchmark-v1
+name: qwen3-4b-local-adapter-smoke
+description: Comparação local reprodutível entre Qwen base e adaptador QLoRA.
+language: pt-BR
+rubric:
+  path: configs/evaluation/architecture-v1.yaml
+  name: architecture
+  version: v1
+execution:
+  runtime: transformers
+  model_revision: cdbee75f17c01a7cc42f958dc650907174af0554
+  adapter_manifest: ../../var/training/qwen3-4b-smoke/adapter-manifest.json
+generation:
+  temperature: 0
+  # Bounded functional smoke: avoids CPU offload dominating an otherwise
+  # small comparison on a 12 GB GPU. It is not a quality benchmark.
+  max_new_tokens: 64
+strategies:
+  - id: qwen3-4b-baseline
+    version: "1"
+    mode: baseline
+  - id: qwen3-4b-qlora-smoke
+    version: "1"
+    mode: adapter
+scenarios:
+  - id: local-adapter-evaluation
+    title: Serviço de faturamento com auditoria e consistência
+    language: pt-BR
+    categories:
+      - sql_vs_nosql
+    problem: Escolher a persistência para o faturamento que exige transações consistentes, auditoria e relatórios relacionais.
+    facts:
+      - O serviço registra faturas, pagamentos e estornos relacionados.
+      - A equipe já mantém PostgreSQL com cópias de segurança testadas.
+    constraints:
+      - Pagamentos e estornos devem ser atômicos.
+      - A solução precisa preservar a trilha de auditoria por sete anos.
+    desired_qualities:
+      - Integridade dos dados
+      - Auditabilidade
+    candidate_alternatives:
+      - PostgreSQL relacional
+      - Banco documental
+expected_matrix:
+  scenario_count: 1
+  strategy_count: 2
+  run_count: 2
