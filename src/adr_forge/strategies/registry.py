@@ -77,6 +77,8 @@ def _unavailable(code: str, reason: str) -> StrategyAvailability:
 def default_registry(
     model_revision: str | None = None,
     *,
+    lm_studio_base_url: object | None = None,
+    lm_studio_model_id: str | None = None,
     retrieval_configured: bool = False,
     adapter_artifact_id: UUID | None = None,
     adapter_manifest_path: Path | None = None,
@@ -109,6 +111,15 @@ def default_registry(
         adapter_manifest_path,
         model_revision,
         adapter_runtime_available,
+    )
+    lm_studio_available = lm_studio_base_url is not None and lm_studio_model_id is not None
+    lm_studio_availability = (
+        StrategyAvailability(available=True)
+        if lm_studio_available
+        else _unavailable(
+            "lm_studio_unconfigured",
+            "Configure ADR_FORGE_LM_STUDIO_BASE_URL e ADR_FORGE_LM_STUDIO_MODEL_ID.",
+        )
     )
     return StrategyRegistry(
         [
@@ -180,16 +191,15 @@ def default_registry(
                 id="qwen3-4b-baseline",
                 version="1",
                 kind=StrategyKind.BASE,
-                model_id=QWEN_MODEL_ID,
+                # LM Studio reports the loaded GGUF identifier; the immutable HF
+                # revision remains the provenance reference for this baseline.
+                model_id=lm_studio_model_id or QWEN_MODEL_ID,
                 model_revision=model_revision,
                 prompt_version="adr-v1",
                 generation_config_hash=generation_config_hash,
-                runtime_kind=RuntimeKind.TRANSFORMERS,
+                runtime_kind=RuntimeKind.OPENAI_COMPATIBLE,
                 enabled=is_enabled("qwen3-4b-baseline"),
-                availability=_unavailable(
-                    "runtime_unavailable",
-                    "Dependências opcionais de ML e preflight de GPU são necessários.",
-                ),
+                availability=lm_studio_availability,
             ),
         ]
     )

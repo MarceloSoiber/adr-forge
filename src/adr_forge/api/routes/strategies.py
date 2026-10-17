@@ -38,25 +38,27 @@ async def list_strategies(request: Request) -> list[StrategySummary]:
     settings = request.app.state.settings
     registry = default_registry(
         model_revision=settings.model_revision,
+        lm_studio_base_url=settings.lm_studio_base_url,
+        lm_studio_model_id=settings.lm_studio_model_id,
         # The endpoint validates configuration only; it never probes the remote
         # service.  A token is required by the production Knowledge Hub adapter.
         retrieval_configured=settings.knowledge_hub_token is not None,
     )
     return [
         StrategySummary(
-            "id": strategy.id,
-            "version": strategy.version,
-            "kind": strategy.kind.value,
-            "model_id": strategy.model_id,
-            "model_revision": strategy.model_revision,
-            "requires_retrieval": strategy.requires_retrieval,
-            "available": strategy.enabled and strategy.availability.available,
-            "unavailable_reason": (
+            id=strategy.id,
+            version=strategy.version,
+            kind=strategy.kind.value,
+            model_id=strategy.model_id,
+            model_revision=strategy.model_revision,
+            requires_retrieval=strategy.requires_retrieval,
+            available=strategy.enabled and strategy.availability.available,
+            unavailable_reason=(
                 strategy.availability.unavailable_reason
                 if not strategy.enabled or not strategy.availability.available
                 else None
             ),
-            "unavailable_reason_code": (
+            unavailable_reason_code=(
                 "strategy_disabled"
                 if not strategy.enabled
                 else strategy.availability.unavailable_reason_code

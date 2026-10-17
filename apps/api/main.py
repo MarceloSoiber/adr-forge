@@ -26,6 +26,17 @@ from adr_forge.strategies.executor import AnalysisExecutor
 from adr_forge.system.resources import HostResourceProbe
 
 
+def _remove_generated_schema_titles(value: object) -> None:
+    """Keep generated OpenAPI aligned with the title-free committed contract."""
+    if isinstance(value, dict):
+        value.pop("title", None)
+        for nested in value.values():
+            _remove_generated_schema_titles(nested)
+    elif isinstance(value, list):
+        for nested in value:
+            _remove_generated_schema_titles(nested)
+
+
 def create_app(settings: Settings | None = None) -> FastAPI:
     resolved = settings or Settings()
 
@@ -74,6 +85,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     def phase_three_openapi() -> dict[str, object]:
         document = original_openapi()
+        _remove_generated_schema_titles(document)
         components = document.setdefault("components", {}).setdefault("schemas", {})
         components.setdefault("ProgressEvent", ProgressEvent.model_json_schema())
         scenario_request = components.get("CreateScenarioRequest")
@@ -105,6 +117,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             for operation in path.values():
                 if not isinstance(operation, dict):
                     continue
+                # FastAPI's synthesized list-response title is documentation
+                # metadata and is absent from the versioned wire contract.
+                successful = operation.get("responses", {}).get("200")
+                if isinstance(successful, dict):
+                    schema = successful.get("content", {}).get("application/json", {}).get("schema")
+                    if isinstance(schema, dict) and schema.get("type") == "array":
+                        schema.pop("title", None)
                 for response in operation.get("responses", {}).values():
                     content = response.get("content", {})
                     if (

@@ -65,6 +65,12 @@ class Settings(BaseSettings):
     model_id: str = "Qwen/Qwen3-4B-Instruct-2507"
     model_revision: str = DEFAULT_QWEN_MODEL_REVISION
     model_trust_remote_code: bool = False
+    # The OpenAI-compatible endpoint is deliberately opt-in: a configured
+    # application never probes a LAN service unless both values are supplied.
+    lm_studio_base_url: AnyHttpUrl | None = None
+    lm_studio_model_id: str | None = Field(default=None, min_length=1)
+    lm_studio_api_key: SecretStr | None = None
+    lm_studio_timeout_seconds: Annotated[int, Field(ge=1, le=300)] = 120
 
     @field_validator("host", "web_host")
     @classmethod
@@ -89,6 +95,10 @@ class Settings(BaseSettings):
             raise ValueError("artifact_limit_bytes cannot exceed the 50 GiB local safety limit")
         if self.model_trust_remote_code:
             raise ValueError("model_trust_remote_code must be false")
+        if (self.lm_studio_base_url is None) != (self.lm_studio_model_id is None):
+            raise ValueError(
+                "lm_studio_base_url and lm_studio_model_id must be configured together"
+            )
         return self
 
 

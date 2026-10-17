@@ -30,7 +30,8 @@ from adr_forge.shared.errors import (
     StaleRevisionError,
     ValidationError,
 )
-from adr_forge.strategies.fake import FakeStrategy
+from adr_forge.strategies.registry import default_registry
+from adr_forge.strategies.runtime import build_runtime
 from adr_forge.system.progress import CancellationToken
 
 
@@ -260,6 +261,22 @@ async def create_analysis_run(
     revision = await scenarios.get_revision(str(command.scenario_revision_id))
     if revision is None:
         raise ConflictError("Scenario revision not found")
+    settings = request.app.state.settings
+    registry = default_registry(
+        model_revision=settings.model_revision,
+        lm_studio_base_url=settings.lm_studio_base_url,
+        lm_studio_model_id=settings.lm_studio_model_id,
+        retrieval_configured=settings.knowledge_hub_token is not None,
+    )
+    availability = registry.available_for(
+        command.strategy_id,
+        command.strategy_version,
+        snapshot_id=command.retrieval_snapshot_id,
+    )
+    if not availability.available:
+        raise ConflictError(availability.unavailable_reason or "Strategy is unavailable")
+    selected = registry.get(command.strategy_id, command.strategy_version)
+    assert selected is not None
     repository = await _run_repository(request)
     run = DomainAnalysisRun(
         scenario_revision_id=revision.id,
@@ -281,9 +298,24 @@ async def create_analysis_run(
     )
 
     now = datetime.now(UTC)
-    generated = await DecisionService().execute(
-        FakeStrategy(), revision, run.id, CancellationToken()
-    )
+    try:
+        generated = await DecisionService().execute(
+            build_runtime(selected, settings), revision, run.id, CancellationToken()
+        )
+    except RuntimeError:
+        failed = running.transition(
+            RunStatus.FAILED,
+            stage="falha na inferência",
+            progress_percent=100,
+            failure_code="inference_failed",
+        )
+        await repository.transition(
+            {**failed.model_dump(mode="python"), "validation_attempts": []},
+            running.progress_sequence,
+        )
+        persisted = await repository.get(str(run.id))
+        assert persisted is not None
+        return _run_response(persisted)
     parsed = generated.parsed.original
     if parsed.draft is None or any(finding.severity == "error" for finding in parsed.findings):
         invalid = running.transition(
@@ -507,7 +539,7 @@ async def get_run_adr(runId: UUID, request: Request) -> dict[str, Any]:
             "content": {
                 "text/markdown": {"schema": {"type": "string"}},
                 "application/json": {"schema": {"$ref": "#/components/schemas/AdrDraft"}},
-            }
+            },
         },
         404: PROBLEM,
         409: PROBLEM,

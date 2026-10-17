@@ -12,14 +12,19 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from adr_forge.artifacts.repository import ArtifactRepository
 from adr_forge.artifacts.store import ArtifactStore
 from adr_forge.retrieval.knowledge_hub import KnowledgeHubProvider
-from adr_forge.retrieval.models import RetrievalFilters, RetrievalSnapshot
+from adr_forge.retrieval.models import (
+    RetrievalFilters as DomainRetrievalFilters,
+)
+from adr_forge.retrieval.models import (
+    RetrievalSnapshot as DomainRetrievalSnapshot,
+)
 from adr_forge.retrieval.repository import RetrievalSnapshotRepository
 from adr_forge.retrieval.service import RetrievalService
 from adr_forge.retrieval.snapshot_provider import SnapshotRetrievalProvider
 from adr_forge.shared.errors import PreconditionFailedError, ValidationError
 
 
-class ApiRetrievalFilters(BaseModel):
+class RetrievalFilters(BaseModel):
     """The public filter shape, deliberately excluding provider-only switches."""
 
     model_config = ConfigDict(extra="forbid")
@@ -36,7 +41,7 @@ class CreateRetrievalSnapshotRequest(BaseModel):
 
     provider: Literal["knowledge_hub", "fixture"]
     query: str = Field(min_length=1, max_length=10_000)
-    filters: ApiRetrievalFilters
+    filters: RetrievalFilters
     fixture_id: str | None = Field(default=None, pattern=r"^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$")
 
     @model_validator(mode="after")
@@ -48,7 +53,7 @@ class CreateRetrievalSnapshotRequest(BaseModel):
         return self
 
 
-class RetrievalSnapshotResponse(BaseModel):
+class RetrievalSnapshot(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     id: UUID
@@ -56,7 +61,7 @@ class RetrievalSnapshotResponse(BaseModel):
     provider: Literal["knowledge_hub", "fixture"]
     provider_version: str
     query: str
-    filters: ApiRetrievalFilters
+    filters: RetrievalFilters
     embedding_model: str
     embedding_version: str
     content_hash: str = Field(pattern=r"^[a-f0-9]{64}$")
@@ -67,13 +72,13 @@ class RetrievalSnapshotResponse(BaseModel):
 router = APIRouter(prefix="/api/v1", tags=["retrieval"])
 
 
-def _filters(value: ApiRetrievalFilters) -> RetrievalFilters:
-    return RetrievalFilters(**value.model_dump(), include_match_reasons=True)
+def _filters(value: RetrievalFilters) -> DomainRetrievalFilters:
+    return DomainRetrievalFilters(**value.model_dump(), include_match_reasons=True)
 
 
 async def _retrieve(
-    request: Request, command: CreateRetrievalSnapshotRequest, filters: RetrievalFilters
-) -> RetrievalSnapshot:
+    request: Request, command: CreateRetrievalSnapshotRequest, filters: DomainRetrievalFilters
+) -> DomainRetrievalSnapshot:
     if command.provider == "knowledge_hub":
         if request.app.state.settings.knowledge_hub_token is None:
             raise PreconditionFailedError("Knowledge Hub is not configured.")
@@ -87,7 +92,7 @@ async def _retrieve(
     configured = fixtures.get(command.fixture_id)
     if configured is None:
         raise PreconditionFailedError("Requested retrieval fixture is not configured.")
-    if isinstance(configured, RetrievalSnapshot):
+    if isinstance(configured, DomainRetrievalSnapshot):
         configured = SnapshotRetrievalProvider(configured)
     if not isinstance(configured, SnapshotRetrievalProvider):
         raise PreconditionFailedError("Requested retrieval fixture is invalid.")
@@ -97,7 +102,7 @@ async def _retrieve(
     return snapshot
 
 
-def _response(snapshot: RetrievalSnapshot) -> dict[str, object]:
+def _response(snapshot: DomainRetrievalSnapshot) -> dict[str, object]:
     if snapshot.artifact_id is None or snapshot.content_hash is None:
         raise RuntimeError("retrieval snapshot was not persisted")
     return {
@@ -117,7 +122,7 @@ def _response(snapshot: RetrievalSnapshot) -> dict[str, object]:
 
 @router.post(
     "/retrieval-snapshots",
-    response_model=RetrievalSnapshotResponse,
+    response_model=RetrievalSnapshot,
     status_code=201,
     operation_id="createRetrievalSnapshot",
     responses={

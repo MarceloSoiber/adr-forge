@@ -40,3 +40,17 @@ def test_model_configuration_rejects_unpinned_revisions_before_registry_activati
 def test_model_configuration_rejects_remote_code_execution() -> None:
     with pytest.raises(PydanticValidationError, match=r"remote.code|remote_code"):
         Settings(model_trust_remote_code=True)
+
+
+@pytest.mark.parametrize(
+    "configuration",
+    [
+        {"lm_studio_base_url": "http://192.168.15.111:1234"},
+        {"lm_studio_model_id": "qwen_qwen3-4b-instruct-2507"},
+    ],
+)
+def test_lm_studio_endpoint_and_model_are_an_explicit_configuration_pair(
+    configuration: dict[str, str],
+) -> None:
+    with pytest.raises(PydanticValidationError, match="lm_studio_base_url"):
+        Settings(model_revision=PINNED_REVISION, _env_file=None, **configuration)

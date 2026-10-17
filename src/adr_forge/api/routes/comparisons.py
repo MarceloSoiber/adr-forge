@@ -2,13 +2,22 @@
 
 from __future__ import annotations
 
-from typing import cast
+from typing import Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Request
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from adr_forge.api.routes.analysis import _run_repository
+from adr_forge.decisions.schemas import (
+    ADRStatus,
+    Alternative,
+    Assumption,
+    RationaleLink,
+    ReviewTrigger,
+    Risk,
+    UnresolvedQuestion,
+)
 from adr_forge.evaluation.models import CandidateRun, RubricDimension, RubricVersion
 from adr_forge.evaluation.repository import EvaluationRepository
 from adr_forge.evaluation.service import (
@@ -23,27 +32,75 @@ router = APIRouter(prefix="/api/v1")
 
 
 class CreateComparisonRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     run_ids: list[UUID] = Field(min_length=2)
     rubric_version_id: UUID
 
 
 class SubmitEvaluationRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     evaluator_id: str = Field(min_length=1, max_length=200)
-    evaluator_type: str = "human"
+    evaluator_type: Literal["human", "llm_assisted", "deterministic"] = "human"
     scores: dict[str, dict[str, int]]
     preference: str
     notes: str | None = Field(default=None, max_length=5000)
     supersedes_evaluation_id: UUID | None = None
 
 
+class BlindedAdrDraft(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    schema_version: str
+    title: str = Field(min_length=3, max_length=200)
+    status: ADRStatus
+    context: list[str] = Field(min_length=1)
+    facts: list[str]
+    assumptions: list[Assumption]
+    unresolved_questions: list[UnresolvedQuestion] = Field(max_length=3)
+    constraints: list[str]
+    alternatives: list[Alternative]
+    decision: str | None
+    rationale: list[RationaleLink]
+    positive_consequences: list[str]
+    negative_consequences: list[str]
+    risks: list[Risk]
+    review_triggers: list[ReviewTrigger]
+    confidence: float = Field(ge=0, le=1)
+    reference_ids: list[str]
+
+
+class BlindedCandidateResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    label: str = Field(pattern=r"^[A-Z][A-Z0-9]{0,7}$")
+    adr: BlindedAdrDraft
+
+
+class BlindComparisonResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    id: UUID
+    candidates: list[BlindedCandidateResponse] = Field(min_length=2)
+    rubric: dict[str, object]
+    evaluated: bool
+    current_evaluation_id: UUID | None
+
+
 def _repository(request: Request) -> EvaluationRepository:
     return EvaluationRepository(request.app.state.session_factory)
 
 
-@router.post("/comparisons", status_code=201, operation_id="createBlindComparison")
+@router.post(
+    "/comparisons",
+    status_code=201,
+    operation_id="createBlindComparison",
+    response_model=BlindComparisonResponse,
+)
 async def create_comparison(
     command: CreateComparisonRequest, request: Request
-) -> dict[str, object]:
+) -> BlindComparisonResponse:
     runs = await _run_repository(request)
     candidates: list[CandidateRun] = []
     for run_id in command.run_ids:
@@ -85,8 +142,12 @@ async def create_comparison(
     return _blinded(comparison)
 
 
-@router.get("/comparisons/{comparisonId}", operation_id="getBlindComparison")
-async def get_comparison(comparisonId: UUID, request: Request) -> dict[str, object]:
+@router.get(
+    "/comparisons/{comparisonId}",
+    operation_id="getBlindComparison",
+    response_model=BlindComparisonResponse,
+)
+async def get_comparison(comparisonId: UUID, request: Request) -> BlindComparisonResponse:
     return _blinded(await _comparison(comparisonId, request))
 
 
@@ -139,12 +200,12 @@ async def _comparison(identity: UUID, request: Request) -> Comparison:
     return value
 
 
-def _blinded(comparison: Comparison) -> dict[str, object]:
+def _blinded(comparison: Comparison) -> BlindComparisonResponse:
     value = comparison.blinded()
-    return {
-        "id": comparison.id,
-        "candidates": [{"label": item.label, "adr": item.adr} for item in value.candidates],
-        "rubric": comparison.rubric.model_dump(mode="json"),
-        "evaluated": value.evaluated,
-        "current_evaluation_id": comparison.history()[-1].id if comparison.history() else None,
-    }
+    return BlindComparisonResponse(
+        id=comparison.id,
+        candidates=[{"label": item.label, "adr": item.adr} for item in value.candidates],
+        rubric=comparison.rubric.model_dump(mode="json"),
+        evaluated=value.evaluated,
+        current_evaluation_id=comparison.history()[-1].id if comparison.history() else None,
+    )
