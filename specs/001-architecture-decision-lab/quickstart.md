@@ -17,7 +17,7 @@ disk, and any conflicting LM Studio model unloaded.
 ## Configure
 
 ```bash
-cp .env.example .env
+test -f .env || cp .env.example .env
 uv sync --all-extras
 npm --prefix apps/web ci
 uv run alembic upgrade head
@@ -51,8 +51,6 @@ uv run pytest \
   tests/integration/persistence \
   tests/unit/artifacts \
   tests/unit/system \
-  tests/contract/test_system_api.py \
-  tests/contract/test_doctor_cli.py \
   -m "not gpu and not live_integration"
 uv run adr-forge doctor --json
 ```
@@ -232,6 +230,34 @@ Expected result: the report accounts for all expected runs, shows failures and e
 the strongest non-tuned baseline with the tuned strategy, and includes exact reproduction inputs.
 
 ## Recovery checks
+
+Run the Phase 8 CPU-only recovery and security evidence with temporary roots:
+
+```bash
+validation_root="$(mktemp -d)"
+trap 'rm -rf "$validation_root"' EXIT
+export ADR_FORGE_DATABASE_URL="sqlite+aiosqlite:///$validation_root/adr-forge.sqlite3"
+export ADR_FORGE_ARTIFACT_ROOT="$validation_root/artifacts"
+uv run alembic upgrade head
+uv run pytest -q tests/security tests/integration/test_recovery.py tests/performance/test_local_benchmark.py
+mkdir -p "$validation_root/backups"
+uv run adr-forge database backup --output "$validation_root/backups/adr-forge.db"
+uv run adr-forge artifacts list --json
+```
+
+The variables above keep deletion within disposable SQLite and artifact directories. Verify the dry
+precondition and then confirm the explicit operation:
+
+```bash
+uv run adr-forge artifacts prune
+uv run adr-forge artifacts prune --confirm --json
+```
+
+Expected result: security tests stay offline and redact sentinel secrets; the 100-scenario fake
+benchmark accounts for every scenario; recovery tests restore the backup into an isolated
+temporary path and verify its manifest/integrity/schema; the unconfirmed prune changes nothing;
+the confirmed prune preserves referenced and retained artifacts and reports audit-backed reclaimed
+bytes. Never restore over the configured live database during validation.
 
 - Restarting the API converts abandoned `pending`, `waiting_resources`, and `running` records to
   `interrupted`.

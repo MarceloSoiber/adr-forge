@@ -2,19 +2,30 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
+from collections.abc import AsyncIterator
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Request
-from fastapi.responses import Response
+from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field
 
 from adr_forge.artifacts.repository import ArtifactRepository
 from adr_forge.artifacts.store import ArtifactStore
 from adr_forge.decisions.rendering import render_markdown
 from adr_forge.decisions.schemas import ADRDraft as DomainADRDraft
+from adr_forge.decisions.schemas import (
+    ADRStatus,
+    Alternative,
+    Assumption,
+    RationaleLink,
+    ReviewTrigger,
+    Risk,
+    UnresolvedQuestion,
+)
 from adr_forge.decisions.service import DecisionService
 from adr_forge.experiments.run_models import AnalysisRun as DomainAnalysisRun
 from adr_forge.experiments.run_models import RunStatus
@@ -28,7 +39,9 @@ from adr_forge.shared.errors import (
     StaleRevisionError,
     ValidationError,
 )
-from adr_forge.strategies.fake import FakeStrategy
+from adr_forge.shared.hashing import canonical_sha256
+from adr_forge.strategies.registry import default_registry
+from adr_forge.strategies.runtime import build_runtime
 from adr_forge.system.progress import CancellationToken
 
 
@@ -42,6 +55,7 @@ class Problem(BaseModel):
 
 
 PROBLEM = {"model": Problem}
+ExportFormat = Literal["markdown", "json"]
 
 
 class CreateScenarioRequest(BaseModel):
@@ -96,21 +110,37 @@ class AnalysisRun(BaseModel):
     scenario_revision_id: UUID
     strategy_id: str
     strategy_version: str
-    status: str
+    retrieval_snapshot_id: UUID | None = None
+    experiment_id: UUID | None = None
+    scenario_content_hash: str = Field(pattern=r"^[a-f0-9]{64}$")
+    strategy_configuration_hash: str = Field(pattern=r"^[a-f0-9]{64}$")
+    generation_config_hash: str = Field(pattern=r"^[a-f0-9]{64}$")
+    status: RunStatus
     stage: str
     progress_percent: int | None = Field(default=None, ge=0, le=100)
     progress_sequence: int = Field(ge=0)
-    validation_attempts: list[dict[str, Any]]
+    validation_attempts: list[dict[str, Any]] = Field(max_length=2)
+    raw_output_artifact_id: UUID | None = None
+    repaired_output_artifact_id: UUID | None = None
+    adr_draft_id: UUID | None = None
+    failure_code: str | None = None
+    failure_detail: str | None = Field(default=None, max_length=2000)
+    input_tokens: int | None = Field(default=None, ge=0)
+    output_tokens: int | None = Field(default=None, ge=0)
+    latency_ms: int | None = Field(default=None, ge=0)
+    peak_vram_mb: int | None = Field(default=None, ge=0)
     created_at: datetime
     updated_at: datetime
 
 
 class ProgressEvent(BaseModel):
     run_id: UUID
-    status: str
+    status: RunStatus
     stage: str
     progress_percent: int | None = Field(default=None, ge=0, le=100)
     progress_sequence: int = Field(ge=0)
+    failure_code: str | None = None
+    failure_detail: str | None = Field(default=None, max_length=2000)
     updated_at: datetime
 
 
@@ -120,21 +150,21 @@ class AdrDraft(BaseModel):
     id: UUID
     analysis_run_id: UUID
     schema_version: str
-    title: str
-    status: str
-    context: list[str]
+    title: str = Field(min_length=3, max_length=200)
+    status: ADRStatus
+    context: list[str] = Field(min_length=1)
     facts: list[str]
-    assumptions: list[dict[str, Any]]
-    unresolved_questions: list[dict[str, Any]]
+    assumptions: list[Assumption]
+    unresolved_questions: list[UnresolvedQuestion] = Field(max_length=3)
     constraints: list[str]
-    alternatives: list[dict[str, Any]]
+    alternatives: list[Alternative]
     decision: str | None
-    rationale: list[dict[str, Any]]
+    rationale: list[RationaleLink]
     positive_consequences: list[str]
     negative_consequences: list[str]
-    risks: list[dict[str, Any]]
-    review_triggers: list[dict[str, Any]]
-    confidence: float
+    risks: list[Risk]
+    review_triggers: list[ReviewTrigger]
+    confidence: float = Field(ge=0, le=1)
     reference_ids: list[str]
     created_at: datetime
 
@@ -257,11 +287,32 @@ async def create_analysis_run(
     revision = await scenarios.get_revision(str(command.scenario_revision_id))
     if revision is None:
         raise ConflictError("Scenario revision not found")
+    settings = request.app.state.settings
+    registry = default_registry(
+        model_revision=settings.model_revision,
+        lm_studio_base_url=settings.lm_studio_base_url,
+        lm_studio_model_id=settings.lm_studio_model_id,
+        retrieval_configured=settings.knowledge_hub_token is not None,
+    )
+    availability = registry.available_for(
+        command.strategy_id,
+        command.strategy_version,
+        snapshot_id=command.retrieval_snapshot_id,
+    )
+    if not availability.available:
+        raise ConflictError(availability.unavailable_reason or "Strategy is unavailable")
+    selected = registry.get(command.strategy_id, command.strategy_version)
+    assert selected is not None
     repository = await _run_repository(request)
     run = DomainAnalysisRun(
         scenario_revision_id=revision.id,
         strategy_id=command.strategy_id,
         strategy_version=command.strategy_version,
+        retrieval_snapshot_id=command.retrieval_snapshot_id,
+        experiment_id=command.experiment_id,
+        scenario_content_hash=revision.content_hash,
+        strategy_configuration_hash=canonical_sha256(selected.model_dump(mode="json")),
+        generation_config_hash=selected.generation_config_hash,
     )
     await repository.add({**run.model_dump(mode="python"), "validation_attempts": []})
     waiting = run.transition(
@@ -278,9 +329,24 @@ async def create_analysis_run(
     )
 
     now = datetime.now(UTC)
-    generated = await DecisionService().execute(
-        FakeStrategy(), revision, run.id, CancellationToken()
-    )
+    try:
+        generated = await DecisionService().execute(
+            build_runtime(selected, settings), revision, run.id, CancellationToken()
+        )
+    except RuntimeError:
+        failed = running.transition(
+            RunStatus.FAILED,
+            stage="falha na inferência",
+            progress_percent=100,
+            failure_code="inference_failed",
+        )
+        await repository.transition(
+            {**failed.model_dump(mode="python"), "validation_attempts": []},
+            running.progress_sequence,
+        )
+        persisted = await repository.get(str(run.id))
+        assert persisted is not None
+        return _run_response(persisted)
     parsed = generated.parsed.original
     if parsed.draft is None or any(finding.severity == "error" for finding in parsed.findings):
         invalid = running.transition(
@@ -369,14 +435,75 @@ async def stream_analysis_run_events(runId: UUID, request: Request) -> Response:
     repository = await _run_repository(request)
     if await repository.get(str(runId)) is None:
         raise NotFoundError("Analysis run not found")
-    events = await repository.list_events(str(runId))
-    payload = "".join(
-        "event: progress\ndata: "
-        + json.dumps({"run_id": str(runId), **event}, default=str)
-        + "\n\n"
-        for event in events
+    publisher = request.app.state.analysis_executor.progress
+
+    async def event_stream() -> AsyncIterator[str]:
+        """Project durable run state onto a best-effort in-process SSE stream.
+
+        Subscribe before loading the snapshot: any transition committed during the
+        database read wakes the stream, which then replays durable events newer
+        than the emitted snapshot.  The database remains the source of truth.
+        """
+        loop = asyncio.get_running_loop()
+        notifications: asyncio.Queue[None] = asyncio.Queue(maxsize=1)
+
+        def notify(_: object) -> None:
+            def enqueue() -> None:
+                if notifications.empty():
+                    notifications.put_nowait(None)
+
+            loop.call_soon_threadsafe(enqueue)
+
+        unsubscribe = publisher.subscribe(str(runId), notify)
+        try:
+            snapshot = await repository.get(str(runId))
+            if snapshot is None:
+                return
+            last_sequence = snapshot["progress_sequence"]
+            yield _sse_progress(runId, snapshot)
+            if snapshot["status"] in _TERMINAL_RUN_STATUSES:
+                return
+
+            while True:
+                try:
+                    await asyncio.wait_for(notifications.get(), timeout=15)
+                except TimeoutError:
+                    if await request.is_disconnected():
+                        return
+                    yield ": keepalive\n\n"
+                    continue
+                for event in await repository.list_events(str(runId)):
+                    if event["progress_sequence"] <= last_sequence:
+                        continue
+                    last_sequence = event["progress_sequence"]
+                    yield _sse_progress(runId, event)
+                    if event["status"] in _TERMINAL_RUN_STATUSES:
+                        return
+        finally:
+            unsubscribe()
+
+    return StreamingResponse(event_stream(), media_type="text/event-stream")
+
+
+_TERMINAL_RUN_STATUSES = frozenset(
+    status.value
+    for status in (
+        RunStatus.COMPLETED,
+        RunStatus.NEEDS_CLARIFICATION,
+        RunStatus.INVALID_OUTPUT,
+        RunStatus.FAILED,
+        RunStatus.CANCELLED,
+        RunStatus.INTERRUPTED,
     )
-    return Response(payload, media_type="text/event-stream")
+)
+
+
+def _sse_progress(run_id: UUID, event: dict[str, Any]) -> str:
+    return (
+        "event: progress\ndata: "
+        + json.dumps({"run_id": str(run_id), **event}, default=str)
+        + "\n\n"
+    )
 
 
 @router.post(
@@ -426,18 +553,32 @@ async def get_run_adr(runId: UUID, request: Request) -> dict[str, Any]:
 @router.get(
     "/analysis-runs/{runId}/export",
     operation_id="exportRunAdr",
+    summary="Export a validated ADR",
+    description=(
+        "Exports the validated ADR as a Markdown attachment or as the structured JSON document."
+    ),
+    response_class=Response,
     responses={
         200: {
+            "description": "ADR export.",
+            "headers": {
+                "Content-Disposition": {
+                    "description": "Safe local attachment filename for Markdown exports.",
+                    "schema": {"type": "string"},
+                }
+            },
             "content": {
                 "text/markdown": {"schema": {"type": "string"}},
                 "application/json": {"schema": {"$ref": "#/components/schemas/AdrDraft"}},
-            }
+            },
         },
         404: PROBLEM,
         409: PROBLEM,
     },
 )
-async def export_run_adr(runId: UUID, request: Request, format: str = "markdown") -> Response:
+async def export_run_adr(
+    runId: UUID, request: Request, format: ExportFormat = "markdown"
+) -> Response:
     adr = await get_run_adr(runId, request)
     if format == "json":
         return Response(

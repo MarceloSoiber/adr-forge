@@ -2,12 +2,25 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from dataclasses import dataclass
+from datetime import UTC, datetime
 from typing import cast
 from uuid import UUID, uuid4
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+
+
+@dataclass(frozen=True, slots=True)
+class CatalogArtifact:
+    id: str
+    kind: str
+    relative_path: str
+    sha256: str
+    size_bytes: int
+    retention: str
+    created_at: datetime
+    reference_count: int
 
 
 class ArtifactRepository:
@@ -113,5 +126,73 @@ class ArtifactRepository:
                     "artifact_id": str(artifact_id),
                     "owner_type": owner_type,
                     "owner_id": str(owner_id),
+                },
+            )
+
+    async def list_catalog(self) -> list[CatalogArtifact]:
+        """Return a deterministic, read-only artifact catalog view."""
+        async with self._session_factory() as session:
+            result = await session.execute(
+                text(
+                    """SELECT a.id, a.kind, a.relative_path, a.sha256, a.size_bytes, a.retention,
+                    a.created_at, COUNT(r.artifact_id) AS reference_count
+                    FROM artifacts a LEFT JOIN artifact_references r ON r.artifact_id = a.id
+                    GROUP BY a.id ORDER BY a.created_at ASC, a.id ASC"""
+                )
+            )
+            return [self._catalog_artifact(row) for row in result]
+
+    @staticmethod
+    def _catalog_artifact(row: object) -> CatalogArtifact:
+        created_at = row.created_at  # type: ignore[attr-defined]
+        if isinstance(created_at, str):
+            created_at = datetime.fromisoformat(created_at).replace(tzinfo=UTC)
+        return CatalogArtifact(
+            id=str(row.id),  # type: ignore[attr-defined]
+            kind=str(row.kind),  # type: ignore[attr-defined]
+            relative_path=str(row.relative_path),  # type: ignore[attr-defined]
+            sha256=str(row.sha256),  # type: ignore[attr-defined]
+            size_bytes=int(row.size_bytes),  # type: ignore[attr-defined]
+            retention=str(row.retention),  # type: ignore[attr-defined]
+            created_at=created_at,
+            reference_count=int(row.reference_count),  # type: ignore[attr-defined]
+        )
+
+    async def record_prune(
+        self,
+        artifact: CatalogArtifact,
+        *,
+        operation_id: str,
+        reason: str,
+        reclaimed_bytes: int,
+        pruned_at: datetime,
+    ) -> None:
+        """Remove a catalog record and write its successful cleanup audit atomically."""
+        async with self._session_factory.begin() as session:
+            references = await session.scalar(
+                text("SELECT COUNT(*) FROM artifact_references WHERE artifact_id = :id"),
+                {"id": artifact.id},
+            )
+            if references != 0:
+                raise ValueError("artifact became referenced during prune")
+            await session.execute(text("DELETE FROM artifacts WHERE id = :id"), {"id": artifact.id})
+            await session.execute(
+                text(
+                    """INSERT INTO artifact_prune_audits
+                    (id, operation_id, artifact_id, artifact_kind, relative_path, sha256, reason,
+                    reclaimed_bytes, pruned_at)
+                    VALUES (:id, :operation_id, :artifact_id, :artifact_kind, :relative_path,
+                    :sha256, :reason, :reclaimed_bytes, :pruned_at)"""
+                ),
+                {
+                    "id": str(uuid4()),
+                    "operation_id": operation_id,
+                    "artifact_id": artifact.id,
+                    "artifact_kind": artifact.kind,
+                    "relative_path": artifact.relative_path,
+                    "sha256": artifact.sha256,
+                    "reason": reason,
+                    "reclaimed_bytes": reclaimed_bytes,
+                    "pruned_at": pruned_at,
                 },
             )

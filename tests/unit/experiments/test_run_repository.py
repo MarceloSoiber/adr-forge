@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 from pathlib import Path
+from uuid import UUID, uuid4
 
 import pytest
 from alembic import command
@@ -24,7 +25,7 @@ def migrated_run_database(tmp_path: Path) -> Path:
     config = Config()
     config.set_main_option("script_location", str(repository_root / "alembic"))
     config.set_main_option("sqlalchemy.url", f"sqlite+aiosqlite:///{database_path}")
-    command.upgrade(config, "0006_run_telemetry")
+    command.upgrade(config, "0011_run_provenance")
     return database_path
 
 
@@ -46,6 +47,23 @@ def _payload(run: AnalysisRun) -> dict[str, object]:
     return payload
 
 
+def _run(
+    *,
+    scenario_revision_id: object,
+    strategy_version: str = "1.0.0",
+    experiment_id: UUID | None = None,
+) -> AnalysisRun:
+    return AnalysisRun(
+        scenario_revision_id=scenario_revision_id,  # type: ignore[arg-type]
+        strategy_id="fake",
+        strategy_version=strategy_version,
+        experiment_id=experiment_id,
+        scenario_content_hash="a" * 64,
+        strategy_configuration_hash="b" * 64,
+        generation_config_hash="c" * 64,
+    )
+
+
 @pytest.mark.asyncio
 async def test_add_persists_snapshot_initial_event_and_validation_attempt(
     migrated_run_database: Path,
@@ -55,11 +73,7 @@ async def test_add_persists_snapshot_initial_event_and_validation_attempt(
     repository = RunRepository(session_factory)
     try:
         revision = await _create_revision(session_factory)
-        run = AnalysisRun(
-            scenario_revision_id=revision.id,
-            strategy_id="fake",
-            strategy_version="1.0.0",
-        )
+        run = _run(scenario_revision_id=revision.id)
 
         await repository.add(_payload(run))
         await repository.add_validation_attempt(
@@ -87,6 +101,31 @@ async def test_add_persists_snapshot_initial_event_and_validation_attempt(
 
 
 @pytest.mark.asyncio
+async def test_list_by_experiment_returns_only_matching_runs_in_creation_order(
+    migrated_run_database: Path,
+) -> None:
+    engine = create_database_engine(f"sqlite+aiosqlite:///{migrated_run_database}")
+    session_factory = create_session_factory(engine)
+    repository = RunRepository(session_factory)
+    try:
+        revision = await _create_revision(session_factory)
+        experiment_id = uuid4()
+        first = _run(scenario_revision_id=revision.id, experiment_id=experiment_id)
+        other = _run(scenario_revision_id=revision.id, experiment_id=uuid4())
+        second = _run(scenario_revision_id=revision.id, experiment_id=experiment_id)
+        for run in (first, other, second):
+            await repository.add(_payload(run))
+
+        stored = await repository.list_by_experiment(str(experiment_id))
+
+        assert [entry["id"] for entry in stored] == [str(first.id), str(second.id)]
+        assert all(entry["experiment_id"] == str(experiment_id) for entry in stored)
+        assert all(entry["validation_attempts"] == [] for entry in stored)
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
 async def test_transition_uses_sequence_compare_and_swap_and_records_event(
     migrated_run_database: Path,
 ) -> None:
@@ -95,11 +134,7 @@ async def test_transition_uses_sequence_compare_and_swap_and_records_event(
     repository = RunRepository(session_factory)
     try:
         revision = await _create_revision(session_factory)
-        initial = AnalysisRun(
-            scenario_revision_id=revision.id,
-            strategy_id="fake",
-            strategy_version="1.0.0",
-        )
+        initial = _run(scenario_revision_id=revision.id)
         await repository.add(_payload(initial))
 
         waiting = initial.transition(
@@ -119,15 +154,13 @@ async def test_transition_uses_sequence_compare_and_swap_and_records_event(
 
 
 def test_state_machine_allows_cancel_and_interruption_from_active_states() -> None:
-    initial = AnalysisRun(
+    initial = _run(
         scenario_revision_id=ScenarioRevision(
             scenario_id=DecisionScenario(title="Decisão teste").id,
             revision_number=1,
             problem="Precisamos tomar uma decisão arquitetural com evidências suficientes.",
             categories=[DecisionCategory.SQL_VS_NOSQL],
         ).id,
-        strategy_id="fake",
-        strategy_version="1.0.0",
     )
 
     cancelled = initial.transition(RunStatus.CANCELLED, stage="cancelled")

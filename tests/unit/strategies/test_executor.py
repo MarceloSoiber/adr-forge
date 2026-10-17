@@ -98,7 +98,12 @@ async def test_startup_recovery_persists_interruption_before_publication() -> No
         categories=[DecisionCategory.SQL_VS_NOSQL],
     )
     pending = AnalysisRun(
-        scenario_revision_id=revision.id, strategy_id="fake", strategy_version="1"
+        scenario_revision_id=revision.id,
+        strategy_id="fake",
+        strategy_version="1",
+        scenario_content_hash="a" * 64,
+        strategy_configuration_hash="b" * 64,
+        generation_config_hash="c" * 64,
     )
     repository = _RecoveryRepository(pending)
     executor = AnalysisExecutor()

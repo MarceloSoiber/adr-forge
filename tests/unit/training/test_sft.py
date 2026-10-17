@@ -61,6 +61,8 @@ def test_completion_formatter_masks_everything_before_assistant_output() -> None
 
     assert formatted["text"].startswith("Usuário:")
     assert formatted["text"].endswith("consistência transacional.")
+    assert formatted["prompt"] == "Usuário: escolha uma opção\nAssistente:"
+    assert formatted["completion"] == "Use PostgreSQL por consistência transacional."
     assert formatted["assistant_start"] == len("Usuário: escolha uma opção\nAssistente:")
     assert formatted["loss_scope"] == "completion_only"
 

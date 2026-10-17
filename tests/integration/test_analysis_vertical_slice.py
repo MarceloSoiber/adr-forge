@@ -36,6 +36,7 @@ async def client(tmp_path: Path) -> AsyncIterator[httpx.AsyncClient]:
     settings = Settings(
         database_url=f"sqlite+aiosqlite:///{database_path}",
         artifact_root=tmp_path / "artifacts",
+        model_revision="cdbee75f17c01a7cc42f958dc650907174af0554",
     )
     application = create_app(settings)
     transport = httpx.ASGITransport(app=application)

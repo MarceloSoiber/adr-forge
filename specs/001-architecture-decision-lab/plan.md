@@ -1,6 +1,6 @@
 # Implementation Plan: Architecture Decision Lab
 
-**Branch**: `feat/8-phase-7-curate-trustworthy-experiment-data` | **Date**: 2026-10-15 | **Spec**: [spec.md](spec.md)
+**Branch**: `feat/9-phase-8-polish-and-cross-cutting-validation` | **Date**: 2026-10-16 | **Spec**: [spec.md](spec.md)
 
 **Input**: Feature specification from `specs/001-architecture-decision-lab/spec.md`
 
@@ -1187,3 +1187,243 @@ Phase 7 is complete only when T094–T116 and all conditions below hold together
 | Multi-file adapter is only partially hashed or published | Hash every file, derive one canonical aggregate identity, stage under a unique path, and publish atomically through the artifact service |
 | Tampered or wrong-base adapter becomes selectable | Verify closed manifest, safe paths, file sizes/hashes, aggregate hash, retention, and exact model revision before registry activation |
 | CLI, builder, and domain validators diverge | One application validation/build pipeline supplies CLI and tests; adapters contain no governance policy |
+
+## Phase 8 Development Plan — Polish and Cross-Cutting Validation
+
+### Outcome and Boundary
+
+Phase 8 delivers T117–T127 and turns the completed stories into auditable release evidence. A local
+operator can create and independently verify a consistent SQLite backup, inspect artifact usage,
+and perform an explicitly confirmed, reference-safe prune with append-only audit records. Both CI
+providers enforce the same CPU-safe contracts; security, compatibility, recovery, and 100-scenario
+orchestration overhead are executable gates. The phase then runs the opt-in local model/training
+smokes and fixed benchmark, publishes honest experiment reports, and updates the portfolio README
+only with measured results and explicit limitations.
+
+This phase hardens the existing modular monolith. It does not add authentication, TLS, production
+deployment, a remote backup target, an automatic live-database restore command, multi-user load
+testing, a GPU CI runner, a worker/broker, a second audit subsystem, or new model/dataset features.
+The local Docker daemon is limited to reproducible build/test evidence and must not be used for
+production operations. No production Docker or deployment command is part of T117–T127.
+
+No `NEEDS CLARIFICATION` items remain. Backup/prune/security/CI/performance/reporting decisions are
+recorded in [research.md](research.md); recovery entities are defined in
+[data-model.md](data-model.md); CLI behavior is frozen in [contracts/cli.md](contracts/cli.md); and
+the executable validation path is documented in [quickstart.md](quickstart.md).
+
+### Existing Baseline and Task Mapping
+
+- The current tree does not yet contain the database/artifact CLI commands, prune-audit migration,
+  `tests/security/`, `tests/performance/`, or `.gitlab-ci.yml`. These are missing behavior, not
+  empty scaffolds to be marked complete.
+- T040–T049 remain open. Current startup reconciles temporary artifacts but does not yet prove
+  abandoned-run recovery through the application lifespan; the current SSE route/client path does
+  not yet provide end-to-end live event compatibility evidence. Wave 0 must converge these release
+  prerequisites before T120, T123, T125, or T126 can pass.
+- Current model-loading defaults must be audited because a moving revision such as `main` is not an
+  immutable experiment identity. Phase 8 security evidence fails until runtime and registry paths
+  require the pinned revision recorded by configuration/manifest.
+- The existing evaluation smoke config and fake benchmark are development fixtures, not the fixed
+  baseline-versus-fine-tuned matrix required by T126. The fixed config is frozen only after the
+  published evaluation membership, compatible adapter, runnable strategies, rubric, snapshots,
+  and generation settings resolve.
+- T117 owns consistent backup creation and verification. It uses SQLite's online backup API,
+  validates the copy before publication, and emits a canonical sidecar manifest. Recovery testing
+  restores only to a temporary database; adding a destructive restore command is out of scope.
+- T118 is a Typer adapter over the existing artifact catalog/reference/quota boundaries. The
+  artifact application service owns candidate selection and deletion policy; the CLI owns only
+  input/output and exit semantics. A narrow `ArtifactPruneAudit` records successful physical
+  cleanup without introducing a generic event framework.
+- T119 exercises the controls where they already live. It may expose missing configurable limits
+  or rendering seams, but it must not duplicate production policy inside tests or require network,
+  model packages, CUDA, real tokens, or real private data.
+- T120 treats `contracts/api.openapi.yaml` as the reviewed public authority. The comparison obtains
+  FastAPI's generated schema in-process and compares normalized operations and request/response
+  shapes; a CI job must not silently regenerate and accept drift.
+- T121 mirrors CPU-safe gates in GitLab. It may share scripts/configuration with GitHub Actions but
+  never contains deploy stages, remote SSH, production Docker, GPU assumptions, or live Knowledge
+  Hub/model requirements.
+- T122 measures application overhead with exactly 100 fake scenarios and temporary storage. It is
+  a regression/reliability gate, not evidence of Qwen latency, concurrent-user capacity, or
+  production throughput.
+- T123 composes existing backup, startup interruption, persisted-state-before-SSE-subscribe, and
+  artifact reference invariants. Fault injection covers partial filesystem/database failure; tests
+  never mutate the developer's configured database or artifact root.
+- T124 is a reproducibility audit: execute every CPU-safe command in the quickstart from a clean
+  environment, correct whichever side is wrong, and preserve explicit exclusions for GPU/live
+  integration commands rather than marking them as executed.
+- T125 records baseline and QLoRA smoke outcomes on the supported local hardware. Preflight failure,
+  missing authorized model access, or insufficient capacity is documented as an outcome and never
+  relabeled success; no private output, model, adapter, checkpoint, cache, or token enters Git.
+- T126 runs the fixed benchmark only after dataset, adapter, rubric, strategy, generation, and code
+  identities verify. Reports include every matrix cell and compare fine-tuning against the strongest
+  relevant non-tuned baseline under equivalent inputs.
+- T127 is downstream of accepted reports. Architecture, safety, methodology, results, limitations,
+  and ADR/report links must agree with tracked evidence; aspirational capabilities remain clearly
+  labeled rather than mixed with completed behavior.
+
+### Delivery Sequence
+
+| Wave | Tasks | Deliverable | Entry dependency | Exit evidence |
+| --- | --- | --- | --- | --- |
+| 0 — Contract and release audit | Supports T117–T127 | Frozen backup manifest, prune/audit, security-boundary, OpenAPI comparison, CI, performance, and report evidence shapes; inventory of current quickstart commands and unfinished earlier tasks | Selected release stories complete; current contracts, CI, README, migrations, and task state inspected | Every Phase 8 task maps to one owner, dependency, test, and tracked output; unresolved prerequisite tasks are reported rather than bypassed |
+| 1 — Recovery tooling | T117–T118 | Verified atomic SQLite backup, deterministic artifact listing, explicit safe prune, and append-only prune audits | Wave 0 formats frozen; existing database/artifact services available | Temporary-root contract/integration tests prove live-WAL consistency, integrity/hash/schema verification, no overwrite, cleanup on failure, dry refusal, reference safety, honest partial failure, and exact reclaimed-byte accounting |
+| 2 — Security and compatibility gates | T119–T120 | Offline adversarial security suite and committed-versus-generated OpenAPI compatibility gate | Wave 0 trust boundaries and contract authority frozen | Sentinel secrets never appear; loopback/path/prompt/limit/model controls fail closed; normalized API drift fails locally and in GitHub Actions without starting a server |
+| 3 — CI parity and local overhead | T121–T122 | GitLab CPU-safe pipeline and deterministic 100-scenario fake benchmark | Waves 1–2 commands stable | GitLab runs the same required CPU gates with no deploy/GPU/live integrations; benchmark accounts for 100/100 scenarios, records stage metrics/environment, satisfies generous overhead ceilings, and leaves no leaked tasks/files/references |
+| 4 — Cross-cutting recovery | T123 | Backup/isolated restore, restart-to-interrupted, race-free SSE reconnect, and safe-prune fault/retry evidence | Waves 1–3 green | Integration tests prove preserved terminal data, current state before subscription, manifest-verified isolated restore, referenced-byte survival, retryable partial prune, and no access outside temporary roots |
+| 5 — Reproducibility audit | T124 | Corrected quickstart whose CPU-safe commands execute from a clean checkout | Waves 1–4 interfaces stable | Every CPU-safe command and expected outcome is evidenced; optional GPU/live commands are identified with prerequisites and are not claimed as part of the CPU gate |
+| 6 — Local model evidence | T125 | `docs/experiments/0001-local-smoke.md` with baseline and QLoRA smoke identities, telemetry, outcome, and limitations | Phase 7 dataset/config/adapter path and Wave 5 documentation ready; supported local GPU explicitly available | Report captures hardware, code/model/dataset/config identities, duration, peak VRAM, artifacts/hashes, commands, and success/skip/failure honestly without tracked private artifacts |
+| 7 — Fixed benchmark evidence | T126 | `docs/experiments/0002-baseline-vs-finetuned.md` with complete matrix accounting and reproduction steps | Wave 6 yields compatible strategy evidence; fixed dataset/rubric/config frozen | Every expected run is completed, failed, partial, cancelled, or excluded; deterministic/human results and resource/latency evidence are separated; strongest baseline comparison and SC-001–SC-010 outcomes are explicit |
+| 8 — Portfolio release gate | T127 and checkpoint | README architecture/methodology/results/limitations plus final cross-platform CPU gate | Waves 1–7 accepted | README claims resolve to an ADR, contract, test, or report; all CPU quality/security/compatibility/recovery gates pass; reports contain no secrets/private artifacts; optional GPU evidence is accurately labeled |
+
+Tasks T117–T119 and T121 may proceed in parallel only after Wave 0 freezes their shared output and
+exit semantics. T120 follows the existing API contract and can proceed beside recovery tooling, but
+its workflow edit must be serialized with final GitHub CI integration. T122 can be authored against
+the fake runtime while Waves 1–2 progress, then lands after metric names and cleanup invariants are
+stable. T123–T124 are integration gates and must not be used to compensate for missing lower-level
+tests. T125–T127 remain sequential because each publishes evidence consumed by the next.
+
+### Backup, Prune, and Recovery Rules
+
+- Backup input must resolve to the configured SQLite database. The output and sidecar manifest must
+  resolve outside that live file, use sibling temporary files, refuse overwrite, and clean all
+  partial outputs after injected connection, copy, integrity, hash, manifest, or rename failure.
+- The online backup captures one committed snapshot while WAL writes may exist. The finished copy
+  passes `PRAGMA integrity_check`; its Alembic revision is read from the copy, and the canonical
+  manifest's byte size and SHA-256 are verified before a test opens it as a restored database.
+- A restore test copies the verified backup to a fresh temporary path, migrates only when the
+  documented compatibility rule allows it, and verifies representative immutable records. It
+  never replaces or opens the configured live file for writing as a restore target.
+- Artifact listing uses one stable order and reports catalog bytes separately from host free space,
+  warning/limit/reserve thresholds, retention, and reference count. It has no reconciliation or
+  deletion side effect.
+- Candidate selection is fail-closed: only zero-reference `prunable` artifacts and expired
+  zero-reference `temporary` artifacts qualify. `keep`, referenced, non-expired, unknown-retention,
+  unsafe-path, or catalog-conflicting entries are skipped with a stable reason.
+- Omission of `--confirm` never deletes. A confirmed prune operates per candidate, keeps failures
+  visible for retry, and records only successful outcomes. Metadata removal and audit insertion
+  share one transaction after physical deletion; missing bytes record zero reclaimed bytes rather
+  than the stale catalog size.
+- Recovery tests inject interruption between selection, filesystem deletion, and metadata commit.
+  Reconciliation must converge conservatively without deleting a newly referenced artifact or
+  claiming unverified reclaimed capacity.
+
+### Security, Compatibility, and CI Matrix
+
+| Boundary | Required adversarial evidence | Failure rule |
+| --- | --- | --- |
+| Logging, errors, CLI, reports | Unique token/prompt/retrieval sentinels across success and failure paths | No sentinel appears in captured logs, problem details, JSON/human output, snapshots, or reports |
+| Network binding | Loopback IPv4/IPv6 accepted; wildcard, LAN, and public binding rejected under unauthenticated MVP configuration | Reject before serving; no warning-only fallback |
+| Artifact paths | Absolute, traversal, symlink escape, separator/normalization, and prefix-collision cases | Refuse access/deletion outside the resolved artifact root |
+| Retrieval/prompt boundary | Chunks containing role markers, tool instructions, and contract-override text | Render as delimited quoted evidence; do not alter privileged instructions or trigger tools |
+| Request/context limits | Exact boundary, one-over, aggregate context, and malformed-length cases | Stable 4xx/problem finding before expensive work or artifact publication |
+| Model configuration | Unpinned revision, remote code, unsafe serialization/path, mismatched adapter, invalid quantization | Fail before network, ML import/allocation, or registry activation |
+| OpenAPI | Removed/changed operation, required field, enum, status, or media/schema shape | Normalized compatibility command fails both CI providers |
+
+GitHub and GitLab use pinned Python/Node setup and the repository's canonical commands for format,
+lint, strict typing, unit/property/contract/integration/security tests, dataset/schema validation,
+frontend tests/typecheck/build, secret scan, dependency audit, OpenAPI compatibility, and the fake
+performance/recovery gates selected for default CI. Provider-specific YAML orchestrates these
+commands but does not redefine policy. Both exclude `gpu` and `live_integration` by default and use
+temporary SQLite/artifact roots. GitLab has no deploy environment or production Docker access.
+
+### Performance and Publication Evidence
+
+- The fake performance test records Python/platform/code identity, scenario count, warm/cold rule,
+  SQLite mode, artifact root type, total duration, stage latency distribution, report/artifact byte
+  counts, failures, and cleanup state. Timing ceilings are intentionally loose enough for shared CI
+  and exist to catch deadlocks or order-of-magnitude regressions, not to advertise throughput.
+- T125 records the exact local commands and prerequisites, NVIDIA hardware/driver/CUDA evidence,
+  model and revision, adapter/config/dataset/code hashes, effective settings, duration, peak VRAM,
+  terminal state, artifacts, and sanitized failure details. Baseline inference and QLoRA training
+  are distinct results; one cannot substitute for the other.
+- T126 freezes the expected scenario-strategy matrix before execution. The report lists every cell,
+  all validation findings, repairs, exclusions and terminal failures, deterministic aggregate
+  denominators, blind human evaluation coverage, latency/resource measurements, and whether each
+  success criterion was met, not met, or lacked sufficient evidence.
+- A fine-tuning benefit claim is allowed only when SC-009 is computed against the strongest
+  relevant non-fine-tuned baseline under equivalent inputs and unsupported-claim failures remain
+  within the specified bound. Otherwise the report states that benefit was not demonstrated.
+- The README summarizes rather than recomputes results. Links point to versioned ADRs, contracts,
+  dataset manifests, and experiment reports. Any missing or failed GPU evidence and the local,
+  single-user, no-authentication boundary remain prominent limitations.
+
+### Phase 8 Constitution Check
+
+| Principle | Phase 8 design evidence | Status |
+| --- | --- | --- |
+| Evidence Before Claims | README and reports cite measured, immutable evidence; failed or unavailable local model runs remain explicit and no fake benchmark supports GPU/capacity claims | PASS |
+| Reproducible and Honest Experiments | Smoke and fixed benchmark capture exact identities, full matrix accounting, failures/exclusions, telemetry, commands, and strongest-baseline comparison | PASS |
+| Dataset Integrity and Human Review | Fixed published dataset/lineage/review identities remain prerequisites; Phase 8 neither regenerates nor silently repairs benchmark inputs | PASS |
+| Contracts and Tests | Backup/prune CLI, OpenAPI, security, recovery, performance, quickstart, and cross-provider CPU gates are executable and versioned | PASS |
+| Local-First Security and Resource Safety | Loopback/redaction/path/prompt/limit/model controls are adversarially tested; cleanup is confirmed and reference-safe; GPU remains opt-in and exclusive | PASS |
+| Simplicity With Measured Evolution | Existing SQLite, artifact, fake runtime, FastAPI schema, and CI commands are reused without remote backup, restore mutation, broker, load service, GPU runner, or generic audit framework | PASS |
+
+Post-design review found no constitutional violation. The explicit prune audit is the only new
+persistent concept because destructive cross-filesystem cleanup needs durable accountability. A
+general event store and automatic restore workflow would add operational risk without a current
+consumer. GitLab parity remains test-only and introduces no production deployment path.
+
+### SOLID Design Review
+
+| Principle | Status | Evidence and proportional decision |
+| --- | --- | --- |
+| SRP | Atendido | SQLite backup mechanics stay in persistence/application support, prune policy in artifacts, Typer in CLI adapters, contract comparison in tests/tooling, and publication evidence in docs; independent actors do not share one service |
+| OCP | Atendido | Existing ports and versioned manifests cover proven fake/real runtime, artifact catalog, and CI-provider variations; no speculative backup-provider, audit-sink, or benchmark plugin hierarchy is added |
+| LSP | Atendido with contract gates | Fake and real strategy/resource boundaries retain the same observable contracts; GitHub and GitLab execute the same canonical commands; backup/prune fakes must pass the same failure and result semantics |
+| ISP | Atendido | Backup consumes database/path/hash/version capabilities; prune consumes catalog/reference/store/audit capabilities; OpenAPI and report tooling do not depend on unrelated training or retrieval operations |
+| DIP | Atendido | High-level recovery and cleanup rules depend on narrow consumer-owned boundaries while SQLite, filesystem, clock, environment, and CI-provider details remain at adapters |
+
+The proportional recommendation is to keep the modular boundaries and add only the narrow prune
+audit repository plus test seams for backup/filesystem failure. Do not create generic backup,
+security-policy, metrics, CI, or audit frameworks. Material verification is contract-based:
+restored-copy integrity/hash/schema, reference-safe partial prune, identical provider gates, and
+complete report accounting.
+
+### Completion Gate
+
+Phase 8 is complete only when T117–T127 and all conditions below hold together:
+
+1. A live WAL-mode fixture produces a non-overwriting atomic backup whose copy passes integrity,
+   schema revision, size, and SHA-256 verification; injected failures leave no published partial
+   pair, and an isolated restore preserves representative immutable records.
+2. Artifact listing is deterministic and read-only. Unconfirmed prune changes nothing; confirmed
+   prune never deletes `keep`, referenced, non-expired, or unsafe-path content, records every
+   success, reports every failure, and never overstates reclaimed bytes.
+3. The offline security suite proves redaction, loopback restriction, artifact confinement,
+   prompt-injection isolation, request/context boundaries, and safe pinned model loading across
+   success and error paths with no network, model package, CUDA, or real-secret dependency.
+4. Committed OpenAPI compatibility and all canonical CPU-safe quality gates pass in GitHub and
+   GitLab configuration. The GitLab pipeline contains no deploy, production Docker, remote SSH,
+   GPU, or live-integration stage.
+5. The 100-scenario fake benchmark accounts for every input, records environment and per-stage
+   overhead, stays within documented regression ceilings, and leaves no pending task, leaked file,
+   dangling reference, or unsupported capacity claim.
+6. Backup/restore, startup interruption, SSE reconnect, and partial-prune recovery pass against
+   disposable roots. Every CPU-safe quickstart command runs from a clean environment and its
+   documented expected result matches observed behavior.
+7. The local baseline and QLoRA smoke report records exact identities, hardware, settings,
+   duration, peak VRAM, terminal outcome, and limitations without committing private artifacts. A
+   skipped/preflight/failed run remains visibly non-successful.
+8. The fixed benchmark report accounts for the entire declared matrix, preserves failures and
+   exclusions, distinguishes deterministic and human evidence, supplies reproduction commands,
+   evaluates SC-001–SC-010, and makes no fine-tuning benefit claim unless SC-009 is satisfied.
+9. The README's architecture, setup, safety boundary, dataset method, results, and limitations link
+   to accepted ADRs/contracts/reports and contain no claim unsupported by a tracked artifact or
+   executable gate.
+
+### Risks and Controls
+
+| Risk | Control |
+| --- | --- |
+| Copying only the SQLite main file yields an inconsistent backup under WAL | Use the online backup API, verify the finished copy, and test concurrent committed writes |
+| Backup or manifest failure overwrites trusted recovery material | Refuse existing/live targets, stage sibling files, verify before rename, and clean partial outputs |
+| Prune deletes a newly referenced or retained artifact | Re-check reference/retention/path at deletion, serialize the local operation, fail closed, and test the race |
+| Filesystem deletion succeeds but audit/catalog commit fails | Report the item as failed/unverified, preserve retry/reconciliation evidence, and never count uncommitted reclaimed bytes |
+| Security tests assert helper behavior while real adapters leak | Exercise public API/CLI/log/report/render boundaries with unique sentinels and capture every output channel |
+| Generated OpenAPI drift is accepted by regenerating the committed file | Treat the committed contract as authority and fail normalized compatibility before any update |
+| GitLab appears green while running a weaker or dangerous pipeline | Invoke canonical shared commands, assert default marker exclusions, and prohibit deploy/remote/production Docker jobs |
+| Fake benchmark numbers are marketed as model or scale performance | Label them orchestration overhead, record environment, use generous regression thresholds, and reserve model claims for T125/T126 |
+| Optional GPU work blocks closure or is reported optimistically | Separate mandatory CPU completion from opt-in execution evidence and publish skip/preflight/failure honestly |
+| Benchmark omits unfavorable cells or compares inequivalent inputs | Freeze the matrix and identities first, retain all terminal outcomes, and gate claims on full accounting and equivalence |
+| README becomes stale or overstates results | Make it the last wave and require every capability/result statement to resolve to a current contract, ADR, test, or report |

@@ -108,6 +108,7 @@ class Comparison:
         evaluator_type: str,
         scores: dict[str, dict[str, int]],
         preference: str,
+        judge_model_identity: dict[str, str] | None = None,
         notes: str | None = None,
         supersedes_evaluation_id: UUID | None = None,
     ) -> EvaluationResult:
@@ -133,6 +134,7 @@ class Comparison:
             rubric_version_id=self.rubric.id,
             evaluator_id=evaluator_id,
             evaluator_type=EvaluatorType(evaluator_type),
+            judge_model_identity=judge_model_identity,
             scores=scores,
             preference=preference,
             notes=notes,

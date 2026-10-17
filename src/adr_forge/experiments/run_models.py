@@ -55,6 +55,11 @@ class AnalysisRun(BaseModel):
     scenario_revision_id: UUID
     strategy_id: str
     strategy_version: str
+    retrieval_snapshot_id: UUID | None = None
+    experiment_id: UUID | None = None
+    scenario_content_hash: str = Field(pattern=r"^[a-f0-9]{64}$")
+    strategy_configuration_hash: str = Field(pattern=r"^[a-f0-9]{64}$")
+    generation_config_hash: str = Field(pattern=r"^[a-f0-9]{64}$")
     status: RunStatus = RunStatus.PENDING
     stage: str = "pending"
     progress_percent: int | None = Field(default=None, ge=0, le=100)
