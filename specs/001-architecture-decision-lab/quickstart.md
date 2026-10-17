@@ -17,7 +17,7 @@ disk, and any conflicting LM Studio model unloaded.
 ## Configure
 
 ```bash
-cp .env.example .env
+test -f .env || cp .env.example .env
 uv sync --all-extras
 npm --prefix apps/web ci
 uv run alembic upgrade head
@@ -51,8 +51,6 @@ uv run pytest \
   tests/integration/persistence \
   tests/unit/artifacts \
   tests/unit/system \
-  tests/contract/test_system_api.py \
-  tests/contract/test_doctor_cli.py \
   -m "not gpu and not live_integration"
 uv run adr-forge doctor --json
 ```
@@ -236,13 +234,19 @@ the strongest non-tuned baseline with the tuned strategy, and includes exact rep
 Run the Phase 8 CPU-only recovery and security evidence with temporary roots:
 
 ```bash
+validation_root="$(mktemp -d)"
+trap 'rm -rf "$validation_root"' EXIT
+export ADR_FORGE_DATABASE_URL="sqlite+aiosqlite:///$validation_root/adr-forge.sqlite3"
+export ADR_FORGE_ARTIFACT_ROOT="$validation_root/artifacts"
+uv run alembic upgrade head
 uv run pytest -q tests/security tests/integration/test_recovery.py tests/performance/test_local_benchmark.py
-uv run adr-forge database backup --output var/backups/adr-forge.db
+mkdir -p "$validation_root/backups"
+uv run adr-forge database backup --output "$validation_root/backups/adr-forge.db"
 uv run adr-forge artifacts list --json
 ```
 
-Before exercising deletion, point the application at disposable SQLite and artifact directories.
-Verify the dry precondition and then confirm the explicit operation:
+The variables above keep deletion within disposable SQLite and artifact directories. Verify the dry
+precondition and then confirm the explicit operation:
 
 ```bash
 uv run adr-forge artifacts prune

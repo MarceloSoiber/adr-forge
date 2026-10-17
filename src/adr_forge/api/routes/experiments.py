@@ -68,7 +68,7 @@ async def create_experiment_route(
         if revision is None:
             raise DomainValidationError("Scenario revision not found.")
         revisions.append(revision)
-    registry = default_registry()
+    registry = default_registry(model_revision=request.app.state.settings.model_revision)
     strategies = []
     for reference in command.strategy_refs:
         strategy = registry.get(reference.id, reference.version)

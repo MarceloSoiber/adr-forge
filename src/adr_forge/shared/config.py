@@ -9,6 +9,11 @@ from typing import Annotated
 from pydantic import AliasChoices, AnyHttpUrl, Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from adr_forge.shared.model_identity import (
+    DEFAULT_QWEN_MODEL_REVISION,
+    require_immutable_model_revision,
+)
+
 GIB = 1024**3
 DEFAULT_ARTIFACT_WARNING_BYTES = 40 * GIB
 DEFAULT_ARTIFACT_LIMIT_BYTES = 50 * GIB
@@ -58,7 +63,7 @@ class Settings(BaseSettings):
         validation_alias=AliasChoices("HF_HOME", "ADR_FORGE_HF_HOME"),
     )
     model_id: str = "Qwen/Qwen3-4B-Instruct-2507"
-    model_revision: str | None = None
+    model_revision: str = DEFAULT_QWEN_MODEL_REVISION
     model_trust_remote_code: bool = False
 
     @field_validator("host", "web_host")
@@ -71,12 +76,19 @@ class Settings(BaseSettings):
     def typed_paths(cls, value: Path) -> Path:
         return value.expanduser()
 
+    @field_validator("model_revision")
+    @classmethod
+    def immutable_model_revision(cls, value: str) -> str:
+        return require_immutable_model_revision(value)
+
     @model_validator(mode="after")
     def validate_artifact_budget(self) -> Settings:
         if self.artifact_warning_bytes >= self.artifact_limit_bytes:
             raise ValueError("artifact_warning_bytes must be less than artifact_limit_bytes")
         if self.artifact_limit_bytes > DEFAULT_ARTIFACT_LIMIT_BYTES:
             raise ValueError("artifact_limit_bytes cannot exceed the 50 GiB local safety limit")
+        if self.model_trust_remote_code:
+            raise ValueError("model_trust_remote_code must be false")
         return self
 
 

@@ -162,7 +162,8 @@ class RunRepository:
                         updated_at = :updated_at,
                         started_at = :started_at, finished_at = :finished_at,
                         input_tokens = :input_tokens, output_tokens = :output_tokens,
-                        latency_ms = :latency_ms, peak_vram_mb = :peak_vram_mb
+                        latency_ms = :latency_ms, peak_vram_mb = :peak_vram_mb,
+                        failure_code = :failure_code, failure_detail = :failure_detail
                         WHERE id = :id AND progress_sequence = :expected_sequence"""
                     ),
                     {**values, "expected_sequence": expected_sequence},

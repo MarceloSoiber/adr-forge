@@ -14,6 +14,7 @@ from adr_forge.shared.errors import NotFoundError
 from adr_forge.shared.hashing import canonical_json, canonical_sha256
 from adr_forge.shared.identity import new_uuid7
 from adr_forge.shared.logging import JsonFormatter, log_context
+from adr_forge.shared.model_identity import require_immutable_model_revision
 from adr_forge.shared.time import utc_now
 
 
@@ -31,11 +32,22 @@ def test_canonical_json_is_order_independent_and_rejects_naive_datetime() -> Non
 
 
 def test_settings_enforce_loopback_and_artifact_budget() -> None:
-    assert Settings().artifact_free_disk_reserve_bytes == 5 * 1024**3
+    revision = "cdbee75f17c01a7cc42f958dc650907174af0554"
+    assert Settings(model_revision=revision).artifact_free_disk_reserve_bytes == 5 * 1024**3
     with pytest.raises(PydanticValidationError, match="loopback"):
-        Settings(host="0.0.0.0")  # noqa: S104
+        Settings(host="0.0.0.0", model_revision=revision)  # noqa: S104
     with pytest.raises(PydanticValidationError, match="less than"):
-        Settings(artifact_warning_bytes=10, artifact_limit_bytes=10)
+        Settings(model_revision=revision, artifact_warning_bytes=10, artifact_limit_bytes=10)
+    with pytest.raises(PydanticValidationError, match="model_trust_remote_code"):
+        Settings(model_revision=revision, model_trust_remote_code=True)
+
+
+@pytest.mark.parametrize("revision", [None, "", "main", "MAIN", "v1.0.0", "a" * 39])
+def test_model_revision_requires_an_immutable_commit(revision: str | None) -> None:
+    with pytest.raises((PydanticValidationError, ValueError), match="model_revision"):
+        Settings.model_validate({"model_revision": revision})
+    with pytest.raises(ValueError, match="model_revision"):
+        require_immutable_model_revision(revision)
 
 
 def test_domain_errors_are_problem_details_with_stable_code() -> None:

@@ -19,8 +19,10 @@ from adr_forge.api.routes.retrieval import router as retrieval_router
 from adr_forge.api.routes.strategies import router as strategies_router
 from adr_forge.api.routes.system import router as system_router
 from adr_forge.artifacts.store import ArtifactStore
+from adr_forge.experiments.run_repository import RunRepository
 from adr_forge.persistence.database import create_database_engine, create_session_factory
 from adr_forge.shared.config import Settings
+from adr_forge.strategies.executor import AnalysisExecutor
 from adr_forge.system.resources import HostResourceProbe
 
 
@@ -30,9 +32,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @asynccontextmanager
     async def lifespan(application: FastAPI) -> AsyncIterator[None]:
         await ArtifactStore(resolved.artifact_root).reconcile_temporary()
+        executor = AnalysisExecutor()
+        application.state.analysis_executor = executor
+        await executor.recover_abandoned_runs(RunRepository(application.state.session_factory))
+        await executor.start()
         try:
             yield
         finally:
+            await executor.stop()
             await application.state.database_engine.dispose()
 
     application = FastAPI(title="ADR Forge Local API", version="0.1.0", lifespan=lifespan)

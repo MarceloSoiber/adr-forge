@@ -52,6 +52,7 @@ async def client(
         Settings(
             database_url=f"sqlite+aiosqlite:///{database_path}",
             artifact_root=tmp_path / "artifacts",
+            model_revision="cdbee75f17c01a7cc42f958dc650907174af0554",
         )
     )
     transport = httpx.ASGITransport(app=application)

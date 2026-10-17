@@ -7,6 +7,7 @@ from pathlib import Path
 from uuid import UUID
 
 from adr_forge.shared.hashing import canonical_sha256
+from adr_forge.shared.model_identity import require_immutable_model_revision
 from adr_forge.strategies.fine_tuned import AdapterVerificationError, verify_adapter_manifest
 from adr_forge.strategies.models import (
     AnalysisStrategy,
@@ -74,7 +75,7 @@ def _unavailable(code: str, reason: str) -> StrategyAvailability:
 
 
 def default_registry(
-    model_revision: str = "main",
+    model_revision: str | None = None,
     *,
     retrieval_configured: bool = False,
     adapter_artifact_id: UUID | None = None,
@@ -88,6 +89,7 @@ def default_registry(
     calls Knowledge Hub or imports optional ML runtimes, so strategy discovery
     stays fast and deterministic.
     """
+    model_revision = require_immutable_model_revision(model_revision)
     generation_config_hash = canonical_sha256({"max_new_tokens": 1024, "temperature": 0})
     enabled_ids = set(enabled) if enabled is not None else None
 

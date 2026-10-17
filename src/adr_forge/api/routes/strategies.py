@@ -14,7 +14,7 @@ async def list_strategies(request: Request) -> list[dict[str, object]]:
     """Expose availability without loading optional model runtimes."""
     settings = request.app.state.settings
     registry = default_registry(
-        model_revision=settings.model_revision or "main",
+        model_revision=settings.model_revision,
         # The endpoint validates configuration only; it never probes the remote
         # service.  A token is required by the production Knowledge Hub adapter.
         retrieval_configured=settings.knowledge_hub_token is not None,

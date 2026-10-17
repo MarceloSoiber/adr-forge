@@ -11,6 +11,7 @@ if TYPE_CHECKING:
     from torch import Tensor
 
 from adr_forge.scenarios.models import ScenarioRevision
+from adr_forge.shared.model_identity import require_immutable_model_revision
 from adr_forge.strategies.base import (
     GenerationResult,
     GenerationTelemetry,
@@ -24,8 +25,11 @@ QWEN_MODEL_ID = "Qwen/Qwen3-4B-Instruct-2507"
 
 @dataclass(frozen=True, slots=True)
 class QwenRuntime(StructuredOutputStrategy):
-    revision: str = "main"
+    revision: str
     max_new_tokens: int = 1024
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "revision", require_immutable_model_revision(self.revision))
 
     async def generate(
         self, scenario: ScenarioRevision, *, cancellation: CancellationToken

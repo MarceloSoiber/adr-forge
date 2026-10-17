@@ -28,6 +28,8 @@ class ArtifactStore:
         return path
 
     def normalize_relative_path(self, value: str) -> str:
+        if "\\" in value:
+            raise ArtifactStoreError("artifact path must use safe POSIX separators")
         candidate = Path(value)
         if candidate.is_absolute() or ".." in candidate.parts:
             raise ArtifactStoreError("artifact path must remain below the artifact root")

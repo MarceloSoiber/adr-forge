@@ -1,0 +1,98 @@
+# CPU-only verification for the future GitLab test VM.  This pipeline deliberately
+# has no deploy environment, Docker-in-Docker service, remote access, or live model
+# and Knowledge Hub dependency: tests exercise local fakes and committed snapshots.
+stages:
+  - quality
+  - verification
+  - security
+
+default:
+  interruptible: true
+
+variables:
+  UV_NO_PROGRESS: "1"
+  PYTHONUNBUFFERED: "1"
+  CUDA_VISIBLE_DEVICES: ""
+  ADR_FORGE_HOST: "127.0.0.1"
+
+.python_cpu:
+  image: ghcr.io/astral-sh/uv:0.6.5-python3.12-bookworm-slim
+  before_script:
+    - uv sync --frozen --extra dev
+
+python-quality:
+  extends: .python_cpu
+  stage: quality
+  script:
+    - uv run ruff format --check .
+    - uv run ruff check .
+    - uv run mypy src apps/api
+    - uv run pytest -m "not gpu and not live_integration"
+
+frontend-quality:
+  image: node:22.12.0-bookworm-slim
+  stage: quality
+  before_script:
+    - cd apps/web
+    - npm ci
+  script:
+    - npm run lint
+    - npm run format:check
+    - npm test -- --run
+    - npm run build
+
+dataset-fixture-integrity:
+  image: python:3.12.8-slim-bookworm
+  stage: verification
+  script:
+    - |
+      python - <<'PY'
+      import json
+      from pathlib import Path
+
+      roots = (Path("datasets/fixtures"), Path("datasets/public"), Path("datasets/manifests"))
+      files = sorted(
+          path
+          for root in roots
+          if root.exists()
+          for path in root.rglob("*")
+          if path.suffix in {".json", ".jsonl"}
+      )
+      if not files:
+          print("No dataset JSON or JSONL fixtures exist yet")
+      for path in files:
+          if path.suffix == ".json":
+              json.loads(path.read_text(encoding="utf-8"))
+              continue
+          for line_number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+              if line.strip():
+                  try:
+                      json.loads(line)
+                  except json.JSONDecodeError as error:
+                      raise SystemExit(f"{path}:{line_number}: {error}") from error
+      print(f"Validated {len(files)} dataset fixture files")
+      PY
+
+dependency-audit:
+  extends: .python_cpu
+  stage: security
+  script:
+    - uv export --frozen --no-dev --no-emit-project --output-file /tmp/requirements.txt
+    - uvx pip-audit --requirement /tmp/requirements.txt
+
+secret-scan:
+  image:
+    name: zricethezav/gitleaks:v8.24.2
+    entrypoint: [""]
+  stage: security
+  script:
+    - gitleaks dir . --redact --no-banner
+
+frontend-dependency-audit:
+  image: node:22.12.0-bookworm-slim
+  stage: security
+  before_script:
+    - cd apps/web
+    - npm ci
+  script:
+    - npm audit --audit-level=high

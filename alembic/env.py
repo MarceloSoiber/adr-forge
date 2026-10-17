@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import os
 from logging.config import fileConfig
 
 from alembic import context
@@ -11,6 +12,13 @@ from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import AsyncEngine, async_engine_from_config
 
 config = context.config
+
+# The command-line migration tool does not load application settings. Honour
+# the explicit environment override so disposable validation databases use the
+# same URL as the application and CLI, while preserving programmatic Alembic
+# configuration used by integration tests.
+if config.config_file_name and (database_url := os.environ.get("ADR_FORGE_DATABASE_URL")):
+    config.set_main_option("sqlalchemy.url", database_url)
 
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
