@@ -54,7 +54,5 @@ def test_strategies_operation_and_summary_schema_match_the_public_contract() -> 
         "type": "string",
         "enum": ["base", "prompted", "rag", "fine_tuned", "fine_tuned_rag"],
     }
-    assert properties["unavailable_reason"] == {"anyOf": [{"type": "string"}, {"type": "null"}]}
-    assert properties["unavailable_reason_code"] == {
-        "anyOf": [{"type": "string"}, {"type": "null"}]
-    }
+    assert properties["unavailable_reason"] == {"type": ["string", "null"]}
+    assert properties["unavailable_reason_code"] == {"type": ["string", "null"]}

@@ -66,7 +66,7 @@ async def test_migration_to_head_installs_prune_audit_table(maintenance: tuple) 
             "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'artifact_prune_audits'"
         ).fetchone()
 
-    assert version == ("0010_artifact_prune_audit",)
+    assert version == ("0011_run_provenance",)
     assert audit_table == ("artifact_prune_audits",)
 
 
