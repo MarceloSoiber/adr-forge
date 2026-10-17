@@ -49,10 +49,10 @@ class QwenRuntime(StructuredOutputStrategy):
             )
         except ImportError as error:
             raise RuntimeError("Qwen runtime requires the optional 'ml' dependencies.") from error
-        tokenizer = AutoTokenizer.from_pretrained(  # type: ignore[no-untyped-call]
+        tokenizer = AutoTokenizer.from_pretrained(
             QWEN_MODEL_ID, revision=self.revision, trust_remote_code=False
         )
-        quantization = BitsAndBytesConfig(  # type: ignore[no-untyped-call]
+        quantization = BitsAndBytesConfig(
             load_in_4bit=True,
             bnb_4bit_quant_type="nf4",
             bnb_4bit_use_double_quant=True,

@@ -394,18 +394,18 @@ def create_trl_trainer(config: SFTConfig, examples: list[dict[str, object]]) -> 
             AutoTokenizer,
             BitsAndBytesConfig,
         )
-        from trl import SFTConfig as TRLSFTConfig  # type: ignore[attr-defined]
-        from trl import SFTTrainer  # type: ignore[attr-defined]
+        from trl import SFTConfig as TRLSFTConfig
+        from trl import SFTTrainer
     except ImportError as exc:  # pragma: no cover - depends on the optional ml extra
         raise SFTExecutionError("install adr-forge[ml] to run QLoRA training") from exc
-    tokenizer = AutoTokenizer.from_pretrained(  # type: ignore[no-untyped-call]
+    tokenizer = AutoTokenizer.from_pretrained(
         config.model_id,
         revision=config.model_revision,
         trust_remote_code=False,
         use_safetensors=True,
     )
     tokenizer.pad_token = tokenizer.pad_token or tokenizer.eos_token
-    quantization = BitsAndBytesConfig(  # type: ignore[no-untyped-call]
+    quantization = BitsAndBytesConfig(
         load_in_4bit=config.load_in_4bit, bnb_4bit_quant_type="nf4", bnb_4bit_use_double_quant=True
     )
     model = AutoModelForCausalLM.from_pretrained(

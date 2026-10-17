@@ -71,8 +71,9 @@ plugins = ["pydantic.mypy"]
 mypy_path = "src"
 
 [[tool.mypy.overrides]]
-module = ["torch", "transformers"]
+module = ["torch", "transformers", "peft", "trl"]
 ignore_missing_imports = true
+follow_imports = "skip"
 
 [tool.pytest.ini_options]
 addopts = "--strict-config --strict-markers --cov=adr_forge --cov-report=term-missing"
