@@ -25,11 +25,15 @@ class RunRepository:
             await session.execute(
                 text(
                     """INSERT INTO analysis_runs (id, scenario_revision_id, strategy_id,
-                    strategy_version, status, stage, progress_percent, progress_sequence,
+                    strategy_version, retrieval_snapshot_id, experiment_id, scenario_content_hash,
+                    strategy_configuration_hash, generation_config_hash, status, stage,
+                    progress_percent, progress_sequence,
                     validation_attempts_json, input_tokens, output_tokens, latency_ms, peak_vram_mb,
                     created_at, updated_at)
                     VALUES (:id, :scenario_revision_id, :strategy_id, :strategy_version,
-                    :status, :stage, :progress_percent, :progress_sequence,
+                    :retrieval_snapshot_id, :experiment_id, :scenario_content_hash,
+                    :strategy_configuration_hash, :generation_config_hash, :status, :stage,
+                    :progress_percent, :progress_sequence,
                     :validation_attempts_json, :input_tokens, :output_tokens, :latency_ms,
                     :peak_vram_mb, :created_at, :updated_at)"""
                 ),

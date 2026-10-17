@@ -86,7 +86,47 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     def phase_three_openapi() -> dict[str, object]:
         document = original_openapi()
         _remove_generated_schema_titles(document)
-        components = document.setdefault("components", {}).setdefault("schemas", {})
+        all_components = document.setdefault("components", {})
+        components = all_components.setdefault("schemas", {})
+        all_components["parameters"] = {
+            "RunId": {
+                "name": "runId",
+                "in": "path",
+                "required": True,
+                "schema": {"type": "string", "format": "uuid"},
+            },
+            "ScenarioId": {
+                "name": "scenarioId",
+                "in": "path",
+                "required": True,
+                "schema": {"type": "string", "format": "uuid"},
+            },
+            "ComparisonId": {
+                "name": "comparisonId",
+                "in": "path",
+                "required": True,
+                "schema": {"type": "string", "format": "uuid"},
+            },
+            "ExperimentId": {
+                "name": "experimentId",
+                "in": "path",
+                "required": True,
+                "schema": {"type": "string", "format": "uuid"},
+            },
+        }
+        all_components["responses"] = {
+            "ProblemResponse": {
+                "description": "Problem Details error response.",
+                "content": {
+                    "application/problem+json": {"schema": {"$ref": "#/components/schemas/Problem"}}
+                },
+            }
+        }
+        problem_schema = components.get("Problem")
+        if isinstance(problem_schema, dict):
+            properties = problem_schema.get("properties", {})
+            if isinstance(properties, dict):
+                properties.setdefault("title", {"type": "string"})
         components.setdefault("ProgressEvent", ProgressEvent.model_json_schema())
         scenario_request = components.get("CreateScenarioRequest")
         if isinstance(scenario_request, dict):

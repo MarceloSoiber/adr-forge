@@ -17,6 +17,15 @@ from adr_forge.artifacts.repository import ArtifactRepository
 from adr_forge.artifacts.store import ArtifactStore
 from adr_forge.decisions.rendering import render_markdown
 from adr_forge.decisions.schemas import ADRDraft as DomainADRDraft
+from adr_forge.decisions.schemas import (
+    ADRStatus,
+    Alternative,
+    Assumption,
+    RationaleLink,
+    ReviewTrigger,
+    Risk,
+    UnresolvedQuestion,
+)
 from adr_forge.decisions.service import DecisionService
 from adr_forge.experiments.run_models import AnalysisRun as DomainAnalysisRun
 from adr_forge.experiments.run_models import RunStatus
@@ -30,6 +39,7 @@ from adr_forge.shared.errors import (
     StaleRevisionError,
     ValidationError,
 )
+from adr_forge.shared.hashing import canonical_sha256
 from adr_forge.strategies.registry import default_registry
 from adr_forge.strategies.runtime import build_runtime
 from adr_forge.system.progress import CancellationToken
@@ -100,21 +110,37 @@ class AnalysisRun(BaseModel):
     scenario_revision_id: UUID
     strategy_id: str
     strategy_version: str
-    status: str
+    retrieval_snapshot_id: UUID | None = None
+    experiment_id: UUID | None = None
+    scenario_content_hash: str = Field(pattern=r"^[a-f0-9]{64}$")
+    strategy_configuration_hash: str = Field(pattern=r"^[a-f0-9]{64}$")
+    generation_config_hash: str = Field(pattern=r"^[a-f0-9]{64}$")
+    status: RunStatus
     stage: str
     progress_percent: int | None = Field(default=None, ge=0, le=100)
     progress_sequence: int = Field(ge=0)
-    validation_attempts: list[dict[str, Any]]
+    validation_attempts: list[dict[str, Any]] = Field(max_length=2)
+    raw_output_artifact_id: UUID | None = None
+    repaired_output_artifact_id: UUID | None = None
+    adr_draft_id: UUID | None = None
+    failure_code: str | None = None
+    failure_detail: str | None = Field(default=None, max_length=2000)
+    input_tokens: int | None = Field(default=None, ge=0)
+    output_tokens: int | None = Field(default=None, ge=0)
+    latency_ms: int | None = Field(default=None, ge=0)
+    peak_vram_mb: int | None = Field(default=None, ge=0)
     created_at: datetime
     updated_at: datetime
 
 
 class ProgressEvent(BaseModel):
     run_id: UUID
-    status: str
+    status: RunStatus
     stage: str
     progress_percent: int | None = Field(default=None, ge=0, le=100)
     progress_sequence: int = Field(ge=0)
+    failure_code: str | None = None
+    failure_detail: str | None = Field(default=None, max_length=2000)
     updated_at: datetime
 
 
@@ -124,21 +150,21 @@ class AdrDraft(BaseModel):
     id: UUID
     analysis_run_id: UUID
     schema_version: str
-    title: str
-    status: str
-    context: list[str]
+    title: str = Field(min_length=3, max_length=200)
+    status: ADRStatus
+    context: list[str] = Field(min_length=1)
     facts: list[str]
-    assumptions: list[dict[str, Any]]
-    unresolved_questions: list[dict[str, Any]]
+    assumptions: list[Assumption]
+    unresolved_questions: list[UnresolvedQuestion] = Field(max_length=3)
     constraints: list[str]
-    alternatives: list[dict[str, Any]]
+    alternatives: list[Alternative]
     decision: str | None
-    rationale: list[dict[str, Any]]
+    rationale: list[RationaleLink]
     positive_consequences: list[str]
     negative_consequences: list[str]
-    risks: list[dict[str, Any]]
-    review_triggers: list[dict[str, Any]]
-    confidence: float
+    risks: list[Risk]
+    review_triggers: list[ReviewTrigger]
+    confidence: float = Field(ge=0, le=1)
     reference_ids: list[str]
     created_at: datetime
 
@@ -282,6 +308,11 @@ async def create_analysis_run(
         scenario_revision_id=revision.id,
         strategy_id=command.strategy_id,
         strategy_version=command.strategy_version,
+        retrieval_snapshot_id=command.retrieval_snapshot_id,
+        experiment_id=command.experiment_id,
+        scenario_content_hash=revision.content_hash,
+        strategy_configuration_hash=canonical_sha256(selected.model_dump(mode="json")),
+        generation_config_hash=selected.generation_config_hash,
     )
     await repository.add({**run.model_dump(mode="python"), "validation_attempts": []})
     waiting = run.transition(

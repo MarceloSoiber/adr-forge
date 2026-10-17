@@ -86,6 +86,9 @@ async def test_api_startup_marks_pending_run_interrupted(
             scenario_revision_id=revision.id,
             strategy_id="fake-baseline",
             strategy_version="1",
+            scenario_content_hash=revision.content_hash,
+            strategy_configuration_hash="b" * 64,
+            generation_config_hash="c" * 64,
         )
         payload = pending.model_dump(mode="python")
         payload["validation_attempts"] = []
@@ -140,6 +143,9 @@ async def test_sse_emits_persisted_snapshot_before_live_progress_on_reconnect(
             scenario_revision_id=revision.id,
             strategy_id="fake-baseline",
             strategy_version="1",
+            scenario_content_hash=revision.content_hash,
+            strategy_configuration_hash="b" * 64,
+            generation_config_hash="c" * 64,
         )
         repository = RunRepository(sessions)
         await repository.add({**pending.model_dump(mode="python"), "validation_attempts": []})
