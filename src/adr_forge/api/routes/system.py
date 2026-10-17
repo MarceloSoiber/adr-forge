@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any, Literal
 
 from fastapi import APIRouter, Request
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, Field
 
 from adr_forge.shared.errors import PreconditionFailedError
 
@@ -20,9 +20,7 @@ class ReadinessResponse(BaseModel):
 
 
 class SystemResources(BaseModel):
-    """Sanitized capacity data, intentionally extensible for local diagnostics."""
-
-    model_config = ConfigDict(json_schema_extra={"additionalProperties": True})
+    """Sanitized capacity data for local diagnostics."""
 
     disk: dict[str, Any]
     memory: dict[str, Any]

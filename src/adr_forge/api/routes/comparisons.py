@@ -22,6 +22,7 @@ from adr_forge.decisions.schemas import (
 from adr_forge.evaluation.models import (
     CandidateRun,
     EvaluationResult,
+    RubricDefinition,
     RubricDimension,
     RubricVersion,
 )
@@ -78,19 +79,19 @@ class BlindedAdrDraft(BaseModel):
     reference_ids: list[str]
 
 
-class BlindedCandidateResponse(BaseModel):
+class BlindedCandidate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     label: str = Field(pattern=r"^[A-Z][A-Z0-9]{0,7}$")
     adr: BlindedAdrDraft
 
 
-class BlindComparisonResponse(BaseModel):
+class BlindComparison(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     id: UUID
-    candidates: list[BlindedCandidateResponse] = Field(min_length=2)
-    rubric: dict[str, object]
+    candidates: list[BlindedCandidate] = Field(min_length=2)
+    rubric: RubricDefinition
     evaluated: bool
     current_evaluation_id: UUID | None
 
@@ -106,7 +107,7 @@ class RevealedCandidateResponse(BaseModel):
     generation_config_hash: str = Field(pattern=r"^[a-f0-9]{64}$")
 
 
-class ComparisonRevealResponse(BaseModel):
+class ComparisonReveal(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     comparison_id: UUID
@@ -122,11 +123,11 @@ def _repository(request: Request) -> EvaluationRepository:
     "/comparisons",
     status_code=201,
     operation_id="createBlindComparison",
-    response_model=BlindComparisonResponse,
+    response_model=BlindComparison,
 )
 async def create_comparison(
     command: CreateComparisonRequest, request: Request
-) -> BlindComparisonResponse:
+) -> BlindComparison:
     runs = await _run_repository(request)
     candidates: list[CandidateRun] = []
     for run_id in command.run_ids:
@@ -173,9 +174,9 @@ async def create_comparison(
 @router.get(
     "/comparisons/{comparisonId}",
     operation_id="getBlindComparison",
-    response_model=BlindComparisonResponse,
+    response_model=BlindComparison,
 )
-async def get_comparison(comparisonId: UUID, request: Request) -> BlindComparisonResponse:
+async def get_comparison(comparisonId: UUID, request: Request) -> BlindComparison:
     return _blinded(await _comparison(comparisonId, request))
 
 
@@ -202,14 +203,14 @@ async def submit_evaluation(
 @router.get(
     "/comparisons/{comparisonId}/reveal",
     operation_id="revealComparisonIdentities",
-    response_model=ComparisonRevealResponse,
+    response_model=ComparisonReveal,
 )
-async def reveal(comparisonId: UUID, request: Request) -> ComparisonRevealResponse:
+async def reveal(comparisonId: UUID, request: Request) -> ComparisonReveal:
     try:
         value = (await _comparison(comparisonId, request)).reveal()
     except EvaluationRequired as error:
         raise ConflictError(str(error)) from error
-    return ComparisonRevealResponse(
+    return ComparisonReveal(
         comparison_id=comparisonId,
         evaluation_id=value.evaluation_id,
         candidates=[
@@ -233,12 +234,12 @@ async def _comparison(identity: UUID, request: Request) -> Comparison:
     return value
 
 
-def _blinded(comparison: Comparison) -> BlindComparisonResponse:
+def _blinded(comparison: Comparison) -> BlindComparison:
     value = comparison.blinded()
-    return BlindComparisonResponse(
+    return BlindComparison(
         id=comparison.id,
         candidates=[{"label": item.label, "adr": item.adr} for item in value.candidates],
-        rubric=comparison.rubric.model_dump(mode="json"),
+        rubric=comparison.rubric.model_dump(mode="json", exclude={"published_at"}),
         evaluated=value.evaluated,
         current_evaluation_id=comparison.history()[-1].id if comparison.history() else None,
     )

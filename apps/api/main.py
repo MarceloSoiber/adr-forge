@@ -37,6 +37,33 @@ def _remove_generated_schema_titles(value: object) -> None:
             _remove_generated_schema_titles(nested)
 
 
+def _canonicalize_nullable_any_of(value: object) -> None:
+    """Emit nullable schemas in the contract's compact OpenAPI 3.1 form."""
+    if isinstance(value, dict):
+        options = value.get("anyOf")
+        if (
+            isinstance(options, list)
+            and len(options) == 2
+            and isinstance(options[0], dict)
+            and isinstance(options[1], dict)
+        ):
+            null_option = next((option for option in options if option == {"type": "null"}), None)
+            typed_option = next((option for option in options if option is not null_option), None)
+            if (
+                null_option is not None
+                and isinstance(typed_option, dict)
+                and isinstance(typed_option.get("type"), str)
+            ):
+                value.pop("anyOf")
+                value.update(typed_option)
+                value["type"] = [typed_option["type"], "null"]
+        for nested in value.values():
+            _canonicalize_nullable_any_of(nested)
+    elif isinstance(value, list):
+        for nested in value:
+            _canonicalize_nullable_any_of(nested)
+
+
 def create_app(settings: Settings | None = None) -> FastAPI:
     resolved = settings or Settings()
 
@@ -86,6 +113,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     def phase_three_openapi() -> dict[str, object]:
         document = original_openapi()
         _remove_generated_schema_titles(document)
+        _canonicalize_nullable_any_of(document)
         all_components = document.setdefault("components", {})
         components = all_components.setdefault("schemas", {})
         all_components["parameters"] = {
@@ -157,6 +185,24 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             for operation in path.values():
                 if not isinstance(operation, dict):
                     continue
+                operation.pop("tags", None)
+                parameters = operation.get("parameters", [])
+                if isinstance(parameters, list) and parameters:
+                    operation["parameters"] = [
+                        {
+                            "$ref": f"#/components/parameters/{name[:-2].title()}Id"
+                        }
+                        if isinstance(parameter, dict)
+                        and parameter.get("in") == "path"
+                        and (name := parameter.get("name")) in {
+                            "runId",
+                            "scenarioId",
+                            "comparisonId",
+                            "experimentId",
+                        }
+                        else parameter
+                        for parameter in parameters
+                    ]
                 # FastAPI's synthesized list-response title is documentation
                 # metadata and is absent from the versioned wire contract.
                 successful = operation.get("responses", {}).get("200")
@@ -172,6 +218,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                         and content["application/json"]["schema"]["$ref"].endswith("/Problem")
                     ):
                         content["application/problem+json"] = content.pop("application/json")
+        _canonicalize_nullable_any_of(document)
         return document
 
     application.openapi = phase_three_openapi  # type: ignore[method-assign]

@@ -8,7 +8,8 @@ from fastapi import APIRouter, Request
 from pydantic import BaseModel, ConfigDict, Field
 
 from adr_forge.evaluation.models import RubricVersion
-from adr_forge.experiments.models import Experiment
+from adr_forge.experiments.models import Experiment as DomainExperiment
+from adr_forge.experiments.models import ExperimentStatus
 from adr_forge.experiments.reporting import aggregate_report
 from adr_forge.experiments.repository import ExperimentRepository
 from adr_forge.experiments.service import create_experiment
@@ -35,10 +36,10 @@ class CreateExperimentRequest(BaseModel):
     code_revision: str = Field(min_length=7)
 
 
-class ExperimentResponse(BaseModel):
+class Experiment(BaseModel):
     id: UUID
     name: str
-    status: str
+    status: ExperimentStatus
     rubric_version_id: UUID
     code_revision: str
     expected_run_count: int = Field(ge=1)
@@ -51,9 +52,9 @@ def _repository(request: Request) -> ExperimentRepository:
     return ExperimentRepository(request.app.state.session_factory)
 
 
-def _response(experiment: Experiment) -> ExperimentResponse:
+def _response(experiment: DomainExperiment) -> Experiment:
     accounting = experiment.accounting()
-    return ExperimentResponse(
+    return Experiment(
         id=experiment.id,
         name=experiment.name,
         status=experiment.status,
@@ -70,11 +71,11 @@ def _response(experiment: Experiment) -> ExperimentResponse:
     "/experiments",
     status_code=201,
     operation_id="createExperiment",
-    response_model=ExperimentResponse,
+    response_model=Experiment,
 )
 async def create_experiment_route(
     command: CreateExperimentRequest, request: Request
-) -> ExperimentResponse:
+) -> Experiment:
     experiments = _repository(request)
     rubric: RubricVersion | None = await experiments.get_rubric(command.rubric_version_id)
     if rubric is None:
@@ -116,9 +117,9 @@ async def create_experiment_route(
 
 
 @router.get(
-    "/experiments/{experimentId}", operation_id="getExperiment", response_model=ExperimentResponse
+    "/experiments/{experimentId}", operation_id="getExperiment", response_model=Experiment
 )
-async def get_experiment(experimentId: UUID, request: Request) -> ExperimentResponse:
+async def get_experiment(experimentId: UUID, request: Request) -> Experiment:
     experiment = await _repository(request).get(experimentId)
     if experiment is None:
         raise NotFoundError("Experiment not found.")
