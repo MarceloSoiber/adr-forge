@@ -6,7 +6,7 @@ from typing import Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Request
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from adr_forge.api.routes.analysis import _run_repository
 from adr_forge.decisions.schemas import (
@@ -44,12 +44,18 @@ class CreateComparisonRequest(BaseModel):
     run_ids: list[UUID] = Field(min_length=2)
     rubric_version_id: UUID
 
+    @model_validator(mode="after")
+    def run_ids_are_unique(self) -> CreateComparisonRequest:
+        if len(set(self.run_ids)) != len(self.run_ids):
+            raise ValueError("run_ids must be unique")
+        return self
+
 
 class SubmitEvaluationRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     evaluator_id: str = Field(min_length=1, max_length=200)
-    evaluator_type: Literal["human", "llm_assisted", "deterministic"] = "human"
+    evaluator_type: Literal["human", "llm_assisted", "deterministic"]
     judge_model_identity: dict[str, str] | None = None
     scores: dict[str, dict[str, int]]
     preference: str

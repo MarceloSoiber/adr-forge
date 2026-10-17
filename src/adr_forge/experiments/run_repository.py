@@ -18,6 +18,9 @@ class RunRepository:
         values = dict(run)
         values["id"] = str(values["id"])
         values["scenario_revision_id"] = str(values["scenario_revision_id"])
+        for field in ("retrieval_snapshot_id", "experiment_id"):
+            if values.get(field) is not None:
+                values[field] = str(values[field])
         values["validation_attempts_json"] = json.dumps(
             values.pop("validation_attempts"), default=str
         )
