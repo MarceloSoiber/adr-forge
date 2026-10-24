@@ -302,11 +302,18 @@ Use `--help` para confirmar os arquivos de configuração disponíveis e as opç
 
 ```bash
 uv sync --frozen --extra dev --extra ml
-uv run adr-forge train sft --config configs/training/qwen3-4b-smoke.yaml
+uv run adr-forge dataset build \
+  --manifest datasets/manifests/v0.2.0-adr-json.json \
+  --output data/datasets/v0.2.0-adr-json/training.jsonl
+uv run adr-forge train sft --config configs/training/qwen3-4b-adr-json.yaml
 ```
 
 O treinamento requer o stack opcional de ML, modelo disponível e GPU compatível. O smoke test não é
 um dataset de qualidade para treinamento; ele existe apenas para validar o pipeline.
+
+O perfil `qwen3-4b-adr-json` treina o contrato de saída JSON do ADR e produz respostas
+provisórias quando faltam fatos e restrições. Decisões conclusivas de alta qualidade exigem
+exemplos ADR completos, revisados e com contexto estruturado.
 
 ### Banco e artefatos
 

@@ -5,17 +5,19 @@ from __future__ import annotations
 import asyncio
 import json
 from collections.abc import AsyncIterator
+from dataclasses import asdict
 from datetime import UTC, datetime
 from typing import Any, Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Request
-from fastapi.responses import Response, StreamingResponse
+from fastapi.responses import PlainTextResponse, Response, StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field
 
 from adr_forge.artifacts.repository import ArtifactRepository
 from adr_forge.artifacts.store import ArtifactStore
 from adr_forge.decisions.rendering import render_markdown
+from adr_forge.decisions.repair import repair_adr_json
 from adr_forge.decisions.schemas import ADRDraft as DomainADRDraft
 from adr_forge.decisions.schemas import (
     ADRStatus,
@@ -41,7 +43,7 @@ from adr_forge.shared.errors import (
     ValidationError,
 )
 from adr_forge.shared.hashing import canonical_sha256
-from adr_forge.strategies.registry import default_registry
+from adr_forge.strategies.configuration import configured_registry
 from adr_forge.strategies.runtime import build_runtime
 from adr_forge.system.progress import CancellationToken
 
@@ -327,12 +329,7 @@ async def create_analysis_run(
     if revision is None:
         raise ConflictError("Scenario revision not found")
     settings = request.app.state.settings
-    registry = default_registry(
-        model_revision=settings.model_revision,
-        lm_studio_base_url=settings.lm_studio_base_url,
-        lm_studio_model_id=settings.lm_studio_model_id,
-        retrieval_configured=settings.knowledge_hub_token is not None,
-    )
+    registry = configured_registry(settings)
     availability = registry.available_for(
         command.strategy_id,
         command.strategy_version,
@@ -370,7 +367,11 @@ async def create_analysis_run(
     now = datetime.now(UTC)
     try:
         generated = await DecisionService().execute(
-            build_runtime(selected, settings), revision, run.id, CancellationToken()
+            build_runtime(selected, settings),
+            revision,
+            run.id,
+            CancellationToken(),
+            repair=repair_adr_json,
         )
     except RuntimeError:
         failed = running.transition(
@@ -386,22 +387,7 @@ async def create_analysis_run(
         persisted = await repository.get(str(run.id))
         assert persisted is not None
         return _run_response(persisted)
-    parsed = generated.parsed.original
-    if parsed.draft is None or any(finding.severity == "error" for finding in parsed.findings):
-        invalid = running.transition(
-            RunStatus.INVALID_OUTPUT,
-            stage="saída inválida",
-            progress_percent=100,
-            failure_code="invalid_output",
-        )
-        await repository.transition(
-            {**invalid.model_dump(mode="python"), "validation_attempts": []},
-            running.progress_sequence,
-        )
-        persisted = await repository.get(str(run.id))
-        assert persisted is not None
-        return _run_response(persisted)
-    adr = parsed.draft
+    original_parsed = generated.parsed.original
     raw_output = generated.generation.raw_output.encode("utf-8")
     sha256, size_bytes, relative_path = await ArtifactStore(
         request.app.state.settings.artifact_root
@@ -412,14 +398,73 @@ async def create_analysis_run(
     await ArtifactRepository(request.app.state.session_factory).reference(
         artifact_id, "analysis_run", run.id
     )
-    attempt = {
+    original_attempt = {
         "attempt": "original",
         "artifact_id": artifact_id,
-        "parse_succeeded": True,
-        "findings": [],
+        "parse_succeeded": original_parsed.parse_succeeded,
+        "schema_version": (
+            original_parsed.draft.schema_version if original_parsed.draft is not None else None
+        ),
+        "findings": [asdict(finding) for finding in original_parsed.findings],
         "created_at": now,
     }
-    await repository.add_validation_attempt(str(run.id), attempt)
+    await repository.add_validation_attempt(str(run.id), original_attempt)
+
+    attempts = [original_attempt]
+    parsed = original_parsed
+    repaired_artifact_id: str | None = None
+    if generated.parsed.repaired is not None and generated.parsed.repaired_output is not None:
+        repaired_output = generated.parsed.repaired_output.encode("utf-8")
+        repaired_sha256, repaired_size, repaired_path = await ArtifactStore(
+            request.app.state.settings.artifact_root
+        ).put_bytes(repaired_output)
+        repaired_artifact_id = await ArtifactRepository(
+            request.app.state.session_factory
+        ).create_raw_output(
+            sha256=repaired_sha256,
+            relative_path=repaired_path,
+            size_bytes=repaired_size,
+            created_at=now,
+        )
+        await ArtifactRepository(request.app.state.session_factory).reference(
+            repaired_artifact_id, "analysis_run", run.id
+        )
+        repaired = generated.parsed.repaired
+        repaired_attempt = {
+            "attempt": "repaired",
+            "artifact_id": repaired_artifact_id,
+            "parse_succeeded": repaired.parse_succeeded,
+            "schema_version": repaired.draft.schema_version if repaired.draft is not None else None,
+            "findings": [asdict(finding) for finding in repaired.findings],
+            "created_at": now,
+        }
+        await repository.add_validation_attempt(str(run.id), repaired_attempt)
+        attempts.append(repaired_attempt)
+        if repaired.draft is not None and not any(
+            finding.severity == "error" for finding in repaired.findings
+        ):
+            parsed = repaired
+    if parsed.draft is None or any(finding.severity == "error" for finding in parsed.findings):
+        detail = "; ".join(finding.message for finding in parsed.findings[:3])
+        invalid = running.transition(
+            RunStatus.INVALID_OUTPUT,
+            stage="saída inválida",
+            progress_percent=100,
+            failure_code="invalid_output",
+            failure_detail=detail or "A resposta não segue o formato ADR esperado.",
+            raw_output_artifact_id=UUID(artifact_id),
+            repaired_output_artifact_id=(
+                UUID(repaired_artifact_id) if repaired_artifact_id is not None else None
+            ),
+        )
+        await repository.transition(
+            {**invalid.model_dump(mode="python"), "validation_attempts": attempts},
+            running.progress_sequence,
+        )
+        persisted = await repository.get(str(run.id))
+        assert persisted is not None
+        return _run_response(persisted)
+    adr = parsed.draft
     terminal_status = (
         RunStatus.NEEDS_CLARIFICATION if adr.status.value == "provisional" else RunStatus.COMPLETED
     )
@@ -433,19 +478,25 @@ async def create_analysis_run(
         stage=terminal_stage,
         progress_percent=100,
         adr_draft_id=adr.id,
+        raw_output_artifact_id=UUID(artifact_id),
+        repaired_output_artifact_id=(
+            UUID(repaired_artifact_id) if repaired_artifact_id is not None else None
+        ),
         input_tokens=generated.generation.telemetry.input_tokens,
         output_tokens=generated.generation.telemetry.output_tokens,
         latency_ms=generated.generation.telemetry.latency_ms,
         peak_vram_mb=generated.generation.telemetry.peak_vram_mb,
     )
-    completed_values = {**completed.model_dump(mode="python"), "validation_attempts": [attempt]}
+    completed_values = {**completed.model_dump(mode="python"), "validation_attempts": attempts}
     if not await repository.transition(completed_values, running.progress_sequence):
         raise ConflictError("Run changed while it was being completed")
     await repository.save_adr(str(run.id), adr.model_dump(mode="python"))
     persisted = await repository.get(str(run.id))
     if persisted is None:
         raise NotFoundError("Analysis run was not persisted")
-    persisted["validation_attempts"] = [{k: v for k, v in attempt.items() if k != "created_at"}]
+    persisted["validation_attempts"] = [
+        {k: v for k, v in attempt.items() if k != "created_at"} for attempt in attempts
+    ]
     return _run_response(persisted)
 
 
@@ -460,6 +511,31 @@ async def get_analysis_run(runId: UUID, request: Request) -> dict[str, Any]:
     if found is None:
         raise NotFoundError("Analysis run not found")
     return _run_response(found)
+
+
+@router.get(
+    "/analysis-runs/{runId}/output",
+    operation_id="getRunOutput",
+    response_class=PlainTextResponse,
+    responses={404: PROBLEM, 409: PROBLEM},
+)
+async def get_run_output(runId: UUID, request: Request) -> PlainTextResponse:
+    """Return the captured local model response without logging its content."""
+    run = await (await _run_repository(request)).get(str(runId))
+    if run is None:
+        raise NotFoundError("Analysis run not found")
+    artifact_id = run.get("raw_output_artifact_id")
+    if artifact_id is None:
+        raise ConflictError("Model output is not available for this run")
+    artifact = await ArtifactRepository(request.app.state.session_factory).get_raw_output(
+        str(artifact_id)
+    )
+    if artifact is None:
+        raise NotFoundError("Model output artifact not found")
+    content = await ArtifactStore(request.app.state.settings.artifact_root).read_bytes(
+        artifact.relative_path
+    )
+    return PlainTextResponse(content.decode("utf-8"), media_type="text/plain")
 
 
 @router.get(

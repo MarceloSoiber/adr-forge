@@ -19,6 +19,7 @@ from typing import Any, Protocol, cast
 
 import yaml
 
+from adr_forge.shared.chat_prompt import render_assistant_prompt
 from adr_forge.shared.hashing import canonical_json
 
 
@@ -435,7 +436,10 @@ def create_trl_trainer(config: SFTConfig, examples: list[dict[str, object]]) -> 
         args=arguments,
         train_dataset=Dataset.from_list(
             [
-                {"prompt": example["prompt"], "completion": example["completion"]}
+                {
+                    "prompt": render_assistant_prompt(tokenizer, str(example["prompt"])),
+                    "completion": example["completion"],
+                }
                 for example in examples
             ]
         ),

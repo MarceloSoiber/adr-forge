@@ -7,6 +7,7 @@ from typing import Any, Protocol
 from uuid import UUID
 
 from adr_forge.scenarios.models import ScenarioRevision
+from adr_forge.shared.adr_prompt import build_adr_prompt as _build_adr_prompt
 from adr_forge.system.progress import CancellationToken
 
 
@@ -43,9 +44,14 @@ class StructuredOutputStrategy(Protocol):
 
 def build_adr_prompt(scenario: ScenarioRevision) -> str:
     """Build the same unprivileged structured-output prompt for every baseline."""
-    return (
-        "Gere somente JSON para um ADR em português. Não invente fatos. "
-        f"Problema: {scenario.problem}\n"
-        f"Fatos: {scenario.facts}\nRestrições: {scenario.constraints}\n"
-        f"Alternativas candidatas: {scenario.candidate_alternatives}"
+    return _build_adr_prompt(
+        scenario.problem,
+        scenario.facts,
+        scenario.constraints,
+        scenario.candidate_alternatives,
+        [
+            "Pergunta: "
+            f"{answer.question}\nImpacto: {answer.impact}\nResposta: {answer.answer}"
+            for answer in scenario.clarification_answers
+        ],
     )

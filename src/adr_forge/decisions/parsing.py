@@ -26,6 +26,7 @@ class ParsedOutputs:
 
     original: ParseResult
     repaired: ParseResult | None = None
+    repaired_output: str | None = None
 
 
 def parse_adr_output(raw_output: str, analysis_run_id: UUID) -> ParseResult:
@@ -68,9 +69,9 @@ def parse_adr_output(raw_output: str, analysis_run_id: UUID) -> ParseResult:
             findings=[
                 ValidationFinding(
                     code="output.schema_invalid",
-                    path="/",
+                    path=_json_pointer(item["loc"]),
                     severity="error",
-                    message=item["msg"],
+                    message=_validation_message(item),
                 )
                 for item in error.errors()
             ],
@@ -88,7 +89,35 @@ def parse_with_one_repair(
     original = parse_adr_output(raw_output, analysis_run_id)
     if original.parse_succeeded or repair is None:
         return ParsedOutputs(original=original)
+    repaired_output = repair(raw_output)
+    if repaired_output == raw_output:
+        return ParsedOutputs(original=original)
     return ParsedOutputs(
         original=original,
-        repaired=parse_adr_output(repair(raw_output), analysis_run_id),
+        repaired=parse_adr_output(repaired_output, analysis_run_id),
+        repaired_output=repaired_output,
     )
+
+
+def _json_pointer(location: object) -> str:
+    if not isinstance(location, tuple) or not location:
+        return "/"
+    escaped = (str(part).replace("~", "~0").replace("/", "~1") for part in location)
+    return "/" + "/".join(escaped)
+
+
+def _validation_message(error: object) -> str:
+    if not isinstance(error, dict):
+        return "Valor inválido."
+    error_type = error.get("type")
+    if error_type == "missing":
+        return "Campo obrigatório ausente."
+    if error_type == "extra_forbidden":
+        return f"Campo não permitido. Valor recebido: {_input_preview(error.get('input'))}."
+    message = error.get("msg", "Valor inválido.")
+    return f"{message} Valor recebido: {_input_preview(error.get('input'))}."
+
+
+def _input_preview(value: object) -> str:
+    rendered = json.dumps(value, ensure_ascii=False, default=str)
+    return rendered if len(rendered) <= 160 else f"{rendered[:157]}..."

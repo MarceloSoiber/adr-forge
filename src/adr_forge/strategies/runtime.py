@@ -7,6 +7,7 @@ from adr_forge.strategies.base import StructuredOutputStrategy
 from adr_forge.strategies.fake import FakeStrategy
 from adr_forge.strategies.models import AnalysisStrategy, RuntimeKind
 from adr_forge.strategies.openai_compatible import OpenAICompatibleStrategy
+from adr_forge.strategies.qwen_runtime import QwenRuntime
 
 
 def build_runtime(strategy: AnalysisStrategy, settings: Settings) -> StructuredOutputStrategy:
@@ -25,5 +26,12 @@ def build_runtime(strategy: AnalysisStrategy, settings: Settings) -> StructuredO
                 if settings.lm_studio_api_key is not None
                 else None
             ),
+        )
+    if strategy.runtime_kind is RuntimeKind.TRANSFORMERS:
+        if strategy.adapter_path is None:
+            raise ValueError("Transformers adapter runtime is not configured")
+        return QwenRuntime(
+            revision=strategy.model_revision,
+            adapter_path=strategy.adapter_path,
         )
     raise ValueError(f"No executable runtime is configured for {strategy.id}@{strategy.version}")

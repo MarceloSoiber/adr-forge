@@ -129,6 +129,22 @@ class ArtifactRepository:
                 },
             )
 
+    async def get_raw_output(self, artifact_id: str) -> CatalogArtifact | None:
+        """Return a catalogued model response without exposing other artifact kinds."""
+        async with self._session_factory() as session:
+            row = (
+                await session.execute(
+                    text(
+                        """SELECT a.id, a.kind, a.relative_path, a.sha256, a.size_bytes, a.retention,
+                        a.created_at, COUNT(r.artifact_id) AS reference_count
+                        FROM artifacts a LEFT JOIN artifact_references r ON r.artifact_id = a.id
+                        WHERE a.id = :id AND a.kind = 'raw_output' GROUP BY a.id"""
+                    ),
+                    {"id": artifact_id},
+                )
+            ).first()
+        return self._catalog_artifact(row) if row is not None else None
+
     async def list_catalog(self) -> list[CatalogArtifact]:
         """Return a deterministic, read-only artifact catalog view."""
         async with self._session_factory() as session:

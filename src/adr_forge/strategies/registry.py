@@ -80,7 +80,6 @@ def default_registry(
     lm_studio_base_url: object | None = None,
     lm_studio_model_id: str | None = None,
     retrieval_configured: bool = False,
-    adapter_artifact_id: UUID | None = None,
     adapter_manifest_path: Path | None = None,
     adapter_runtime_available: bool = False,
     enabled: Iterable[str] | None = None,
@@ -107,7 +106,6 @@ def default_registry(
         )
     )
     adapter_availability = _adapter_availability(
-        adapter_artifact_id,
         adapter_manifest_path,
         model_revision,
         adapter_runtime_available,
@@ -166,7 +164,9 @@ def default_registry(
                 kind=StrategyKind.FINE_TUNED,
                 model_id=QWEN_MODEL_ID,
                 model_revision=model_revision,
-                adapter_artifact_id=adapter_artifact_id,
+                adapter_path=(adapter_manifest_path.parent / "adapter")
+                if adapter_manifest_path is not None
+                else None,
                 prompt_version="adr-structured-v1",
                 generation_config_hash=generation_config_hash,
                 runtime_kind=RuntimeKind.TRANSFORMERS,
@@ -179,7 +179,9 @@ def default_registry(
                 kind=StrategyKind.FINE_TUNED_RAG,
                 model_id=QWEN_MODEL_ID,
                 model_revision=model_revision,
-                adapter_artifact_id=adapter_artifact_id,
+                adapter_path=(adapter_manifest_path.parent / "adapter")
+                if adapter_manifest_path is not None
+                else None,
                 prompt_version="adr-rag-v1",
                 generation_config_hash=generation_config_hash,
                 requires_retrieval=True,
@@ -206,14 +208,13 @@ def default_registry(
 
 
 def _adapter_availability(
-    artifact_id: UUID | None,
     manifest_path: Path | None,
     model_revision: str,
     runtime_available: bool,
 ) -> StrategyAvailability:
-    if artifact_id is None or manifest_path is None:
+    if manifest_path is None:
         return _unavailable(
-            "adapter_artifact_missing", "Não há um artefato de adaptador configurado."
+            "adapter_manifest_missing", "Não há um manifesto de adaptador configurado."
         )
     try:
         verify_adapter_manifest(

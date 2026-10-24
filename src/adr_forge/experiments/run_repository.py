@@ -175,6 +175,9 @@ class RunRepository:
         """Persist a new run snapshot and its replayable event in one transaction."""
         values = dict(run)
         values["id"] = str(values["id"])
+        for field in ("raw_output_artifact_id", "repaired_output_artifact_id"):
+            if values.get(field) is not None:
+                values[field] = str(values[field])
         values["validation_attempts_json"] = json.dumps(
             values.pop("validation_attempts", []), default=str
         )
@@ -191,7 +194,9 @@ class RunRepository:
                         started_at = :started_at, finished_at = :finished_at,
                         input_tokens = :input_tokens, output_tokens = :output_tokens,
                         latency_ms = :latency_ms, peak_vram_mb = :peak_vram_mb,
-                        failure_code = :failure_code, failure_detail = :failure_detail
+                        failure_code = :failure_code, failure_detail = :failure_detail,
+                        raw_output_artifact_id = :raw_output_artifact_id,
+                        repaired_output_artifact_id = :repaired_output_artifact_id
                         WHERE id = :id AND progress_sequence = :expected_sequence"""
                     ),
                     {**values, "expected_sequence": expected_sequence},

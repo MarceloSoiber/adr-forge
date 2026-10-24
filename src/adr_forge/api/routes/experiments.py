@@ -17,7 +17,7 @@ from adr_forge.experiments.service import create_experiment
 from adr_forge.scenarios.repository import ScenarioRepository
 from adr_forge.shared.errors import NotFoundError
 from adr_forge.shared.errors import ValidationError as DomainValidationError
-from adr_forge.strategies.registry import default_registry
+from adr_forge.strategies.configuration import configured_registry
 
 router = APIRouter(prefix="/api/v1")
 
@@ -88,11 +88,7 @@ async def create_experiment_route(command: CreateExperimentRequest, request: Req
             raise DomainValidationError("Scenario revision not found.")
         revisions.append(revision)
     settings = request.app.state.settings
-    registry = default_registry(
-        model_revision=settings.model_revision,
-        lm_studio_base_url=settings.lm_studio_base_url,
-        lm_studio_model_id=settings.lm_studio_model_id,
-    )
+    registry = configured_registry(settings)
     strategies = []
     for reference in command.strategy_refs:
         strategy = registry.get(reference.id, reference.version)

@@ -62,6 +62,13 @@ class Settings(BaseSettings):
         default=Path("./data/huggingface"),
         validation_alias=AliasChoices("HF_HOME", "ADR_FORGE_HF_HOME"),
     )
+    adapter_manifest_path: Path | None = Field(
+        default=Path("./data/training/qwen3-4b-adr-json/adapter-manifest.json"),
+        validation_alias=AliasChoices(
+            "ADR_FORGE_ADAPTER_MANIFEST_PATH",
+            "ADAPTER_MANIFEST_PATH",
+        ),
+    )
     model_id: str = "Qwen/Qwen3-4B-Instruct-2507"
     model_revision: str = DEFAULT_QWEN_MODEL_REVISION
     model_trust_remote_code: bool = False
@@ -77,10 +84,10 @@ class Settings(BaseSettings):
     def loopback_hosts_only(cls, value: str) -> str:
         return _validate_loopback(value)
 
-    @field_validator("artifact_root", "hf_home")
+    @field_validator("artifact_root", "hf_home", "adapter_manifest_path")
     @classmethod
-    def typed_paths(cls, value: Path) -> Path:
-        return value.expanduser()
+    def typed_paths(cls, value: Path | None) -> Path | None:
+        return value.expanduser() if value is not None else None
 
     @field_validator("model_revision")
     @classmethod

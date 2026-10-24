@@ -13,6 +13,7 @@ from pydantic import ValidationError
 
 from adr_forge.datasets.governance import validate_example
 from adr_forge.datasets.models import DatasetExample
+from adr_forge.shared.adr_prompt import build_adr_prompt
 from adr_forge.shared.hashing import canonical_json
 
 
@@ -30,6 +31,7 @@ class DatasetValidation:
     records: tuple[dict[str, Any], ...]
     examples: tuple[DatasetExample, ...]
     findings: tuple[DatasetFinding, ...]
+    output_format: str = "completion-v1"
 
     @property
     def valid(self) -> bool:
@@ -42,6 +44,9 @@ def load_and_validate_manifest(path: Path) -> DatasetValidation:
     document = json.loads(raw)
     if not isinstance(document, dict) or document.get("schema_version") != "v1":
         raise ValueError("manifest must be a v1 JSON object")
+    output_format = document.get("output_format", "completion-v1")
+    if output_format not in {"completion-v1", "adr-json-v1"}:
+        raise ValueError("manifest output_format is unsupported")
     records = document.get("examples")
     if records is None and isinstance(document.get("sources"), list):
         records = []
@@ -81,6 +86,7 @@ def load_and_validate_manifest(path: Path) -> DatasetValidation:
         findings=tuple(
             sorted(findings, key=lambda item: (item.example_id, item.code, item.detail))
         ),
+        output_format=output_format,
     )
 
 
@@ -92,7 +98,7 @@ def build_training_dataset(validation: DatasetValidation, output: Path) -> dict[
         raise ValueError("dataset has blocking findings")
 
     rows = [
-        _training_row(example)
+        _training_row(example, validation.output_format)
         for example in sorted(validation.examples, key=lambda item: str(item.id))
     ]
     output.parent.mkdir(parents=True, exist_ok=True)
@@ -146,12 +152,69 @@ def _to_example(record: dict[str, Any]) -> DatasetExample:
     return DatasetExample.model_validate({**source, "prompt": prompt, "completion": completion})
 
 
-def _training_row(example: DatasetExample) -> dict[str, object]:
+def _training_row(
+    example: DatasetExample, output_format: str = "completion-v1"
+) -> dict[str, object]:
+    if output_format == "adr-json-v1":
+        return _structured_training_row(example)
     return {
         "schema_version": "v1",
         "example_id": str(example.id),
         "lineage_parent_ids": [str(parent) for parent in example.lineage_parent_ids],
         "prompt": example.prompt,
         "completion": example.completion,
+        "loss_scope": "completion_only",
+    }
+
+
+def _structured_training_row(example: DatasetExample) -> dict[str, object]:
+    """Teach a valid provisional ADR without fabricating missing source facts."""
+    prompt = build_adr_prompt(example.prompt, [], [], [])
+    completion = {
+        "schema_version": "adr-v1",
+        "title": "Decisão de arquitetura pendente",
+        "status": "provisional",
+        "context": [example.prompt],
+        "facts": [],
+        "assumptions": [
+            {
+                "id": "assumption:context-incomplete",
+                "statement": (
+                    "O contexto não contém fatos e restrições suficientes "
+                    "para uma decisão conclusiva."
+                ),
+                "impact": "A recomendação precisa ser validada após esclarecer o cenário.",
+                "confidence": 0.5,
+            }
+        ],
+        "unresolved_questions": [
+            {
+                "id": "question:missing-context",
+                "question": (
+                    "Quais fatos, restrições e alternativas precisam orientar esta decisão?"
+                ),
+                "impact": (
+                    "Sem essas informações, uma decisão conclusiva pode "
+                    "introduzir risco técnico indevido."
+                ),
+            }
+        ],
+        "constraints": [],
+        "alternatives": [],
+        "decision": None,
+        "rationale": [],
+        "positive_consequences": [],
+        "negative_consequences": [],
+        "risks": [],
+        "review_triggers": [],
+        "confidence": 0.5,
+        "reference_ids": [],
+    }
+    return {
+        "schema_version": "v1",
+        "example_id": str(example.id),
+        "lineage_parent_ids": [str(parent) for parent in example.lineage_parent_ids],
+        "prompt": prompt,
+        "completion": canonical_json(completion),
         "loss_scope": "completion_only",
     }

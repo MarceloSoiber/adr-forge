@@ -7,7 +7,7 @@ from typing import Literal
 from fastapi import APIRouter, Request
 from pydantic import BaseModel, ConfigDict
 
-from adr_forge.strategies.registry import default_registry
+from adr_forge.strategies.configuration import configured_registry
 
 router = APIRouter(prefix="/api/v1")
 
@@ -36,14 +36,7 @@ class StrategySummary(BaseModel):
 async def list_strategies(request: Request) -> list[StrategySummary]:
     """Expose availability without loading optional model runtimes."""
     settings = request.app.state.settings
-    registry = default_registry(
-        model_revision=settings.model_revision,
-        lm_studio_base_url=settings.lm_studio_base_url,
-        lm_studio_model_id=settings.lm_studio_model_id,
-        # The endpoint validates configuration only; it never probes the remote
-        # service.  A token is required by the production Knowledge Hub adapter.
-        retrieval_configured=settings.knowledge_hub_token is not None,
-    )
+    registry = configured_registry(settings)
     return [
         StrategySummary(
             id=strategy.id,

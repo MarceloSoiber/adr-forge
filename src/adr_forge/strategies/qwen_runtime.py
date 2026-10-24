@@ -9,6 +9,7 @@ from time import perf_counter
 from typing import Any
 
 from adr_forge.scenarios.models import ScenarioRevision
+from adr_forge.shared.chat_prompt import render_assistant_prompt
 from adr_forge.shared.model_identity import require_immutable_model_revision
 from adr_forge.strategies.base import (
     GenerationResult,
@@ -72,7 +73,7 @@ class QwenRuntime(StructuredOutputStrategy):
                     "Qwen adapter runtime requires the optional 'ml' dependencies."
                 ) from error
             model = PeftModel.from_pretrained(model, str(self.adapter_path))
-        tokenized = tokenizer(prompt, return_tensors="pt")
+        tokenized = tokenizer(render_assistant_prompt(tokenizer, prompt), return_tensors="pt")
         encoded = {name: value.to(model.device) for name, value in tokenized.items()}
         input_ids = encoded["input_ids"]
         cancellation.raise_if_cancelled()

@@ -67,6 +67,21 @@ def test_completion_formatter_masks_everything_before_assistant_output() -> None
     assert formatted["loss_scope"] == "completion_only"
 
 
+def test_chat_prompt_keeps_the_completion_boundary_after_the_assistant_marker() -> None:
+    from adr_forge.shared.chat_prompt import render_assistant_prompt
+
+    class Tokenizer:
+        def apply_chat_template(
+            self, messages: list[dict[str, str]], *, tokenize: bool, add_generation_prompt: bool
+        ) -> str:
+            assert messages == [{"role": "user", "content": "Gere JSON"}]
+            assert tokenize is False
+            assert add_generation_prompt is True
+            return "<user>Gere JSON</user><assistant>"
+
+    assert render_assistant_prompt(Tokenizer(), "Gere JSON").endswith("<assistant>")
+
+
 class _FakeTrainer:
     def __init__(self, output_dir: Path, *, fail: bool = False) -> None:
         self.output_dir = output_dir
