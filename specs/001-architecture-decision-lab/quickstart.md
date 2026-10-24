@@ -223,7 +223,7 @@ peak VRAM.
 
 ```bash
 uv run adr-forge benchmark run --config configs/evaluation/smoke.yaml
-uv run adr-forge benchmark report --experiment EXPERIMENT_ID --output var/reports/smoke.md
+uv run adr-forge benchmark report --experiment EXPERIMENT_ID --output data/reports/smoke.md
 ```
 
 Expected result: the report accounts for all expected runs, shows failures and exclusions, compares

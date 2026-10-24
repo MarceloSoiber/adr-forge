@@ -236,7 +236,7 @@ def benchmark_run(
         },
         "executions": records,
     }
-    store = Path("var/benchmarks")
+    store = Path("data/benchmarks")
     store.mkdir(parents=True, exist_ok=True)
     (store / f"{experiment.id}.json").write_text(
         json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8"

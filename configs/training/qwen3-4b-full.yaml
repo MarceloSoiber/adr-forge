@@ -1,8 +1,8 @@
 # Starting point for an operator-measured local run.  GPU preflight owns the
 # capacity decision; this file intentionally makes no VRAM or duration claim.
 model_config: ../models/qwen3-4b-instruct-2507.yaml
-dataset_path: ../../var/datasets/v0.1.0/training.jsonl
-output_dir: ../../var/training/qwen3-4b-full
+dataset_path: ../../data/datasets/v0.1.0/training.jsonl
+output_dir: ../../data/training/qwen3-4b-full
 max_seq_length: 2048
 seed: 17
 save_steps: 25

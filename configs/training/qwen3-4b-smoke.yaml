@@ -2,7 +2,7 @@
 # capacity or model quality; it records local measurements when run.
 model_config: ../models/qwen3-4b-instruct-2507.yaml
 dataset_path: ../../datasets/fixtures/training-smoke.jsonl
-output_dir: ../../var/training/qwen3-4b-smoke
+output_dir: ../../data/training/qwen3-4b-smoke
 max_seq_length: 512
 seed: 17
 save_steps: 1

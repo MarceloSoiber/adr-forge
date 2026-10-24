@@ -15,7 +15,7 @@ def benchmark_report(
     json_output: bool = typer.Option(False, "--json"),
 ) -> None:
     """Render an immutable local benchmark result as JSON or Markdown."""
-    source = Path("var/benchmarks") / f"{experiment}.json"
+    source = Path("data/benchmarks") / f"{experiment}.json"
     if not source.is_file():
         typer.echo(f"experiment {experiment} was not found in the local benchmark store", err=True)
         raise typer.Exit(code=3)

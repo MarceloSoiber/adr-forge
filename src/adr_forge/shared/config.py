@@ -40,8 +40,8 @@ class Settings(BaseSettings):
     port: Annotated[int, Field(ge=1, le=65535)] = 8000
     web_host: str = "127.0.0.1"
     web_port: Annotated[int, Field(ge=1, le=65535)] = 5173
-    database_url: str = "sqlite+aiosqlite:///./var/adr-forge.sqlite3"
-    artifact_root: Path = Path("./var/artifacts")
+    database_url: str = "sqlite+aiosqlite:///./data/adr-forge.sqlite3"
+    artifact_root: Path = Path("./data/artifacts")
     artifact_warning_bytes: Annotated[int, Field(gt=0)] = DEFAULT_ARTIFACT_WARNING_BYTES
     artifact_limit_bytes: Annotated[int, Field(gt=0)] = DEFAULT_ARTIFACT_LIMIT_BYTES
     artifact_free_disk_reserve_bytes: Annotated[int, Field(gt=0)] = (
@@ -59,7 +59,7 @@ class Settings(BaseSettings):
         default=None, validation_alias=AliasChoices("HF_TOKEN", "ADR_FORGE_HF_TOKEN")
     )
     hf_home: Path = Field(
-        default=Path("./var/huggingface"),
+        default=Path("./data/huggingface"),
         validation_alias=AliasChoices("HF_HOME", "ADR_FORGE_HF_HOME"),
     )
     model_id: str = "Qwen/Qwen3-4B-Instruct-2507"

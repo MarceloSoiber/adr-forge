@@ -12,7 +12,7 @@ rubric:
 execution:
   runtime: transformers
   model_revision: cdbee75f17c01a7cc42f958dc650907174af0554
-  adapter_manifest: ../../var/training/qwen3-4b-smoke/adapter-manifest.json
+  adapter_manifest: ../../data/training/qwen3-4b-smoke/adapter-manifest.json
 generation:
   temperature: 0
   # Bounded functional smoke: avoids CPU offload dominating an otherwise
