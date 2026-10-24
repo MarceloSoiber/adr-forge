@@ -4,7 +4,7 @@ from uuid import uuid4
 
 from adr_forge.scenarios.clarification import ClarificationAnswer
 from adr_forge.scenarios.models import DecisionCategory, ScenarioRevision
-from adr_forge.shared.adr_prompt import build_adr_prompt
+from adr_forge.shared.adr_prompt import build_adr_prompt, build_adr_repair_prompt
 from adr_forge.strategies.base import build_adr_prompt as build_strategy_prompt
 
 
@@ -59,3 +59,23 @@ def test_strategy_prompt_includes_persisted_clarification_answers() -> None:
     prompt = build_strategy_prompt(scenario)
 
     assert "Resposta: Até 20 mil transações por minuto." in prompt
+
+
+def test_repair_prompt_preserves_the_raw_response_and_validation_findings() -> None:
+    prompt = build_adr_repair_prompt(
+        build_adr_prompt("Escolher a persistência.", [], [], []),
+        '{"status":"provisional","unresolved_questions":[]}',
+        [
+            {
+                "code": "unresolved_questions.required",
+                "path": "/unresolved_questions",
+                "severity": "error",
+                "message": "A provisional ADR requires one to three unresolved questions.",
+            }
+        ],
+    )
+
+    assert '"unresolved_questions":[]' in prompt
+    assert "unresolved_questions.required" in prompt
+    assert "nunca retorne unresolved_questions vazio" in prompt
+    assert '"id":"pergunta-1"' in prompt

@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import json
+from typing import Any
+
 
 def build_adr_prompt(
     problem: str,
@@ -17,6 +20,8 @@ def build_adr_prompt(
             "\nEsclarecimentos já respondidos pelo usuário (trate como evidência do cenário):\n"
             + "\n".join(f"- {answer}" for answer in clarification_answers)
             + "\nNão repita perguntas que já tenham uma resposta acima. "
+            "As perguntas e respostas acima estão resolvidas: não as reformule nem peça o mesmo "
+            "esclarecimento com outras palavras. "
             "Se as evidências forem suficientes, conclua o ADR; caso contrário, "
             "pergunte somente sobre lacunas novas."
         )
@@ -35,9 +40,28 @@ def build_adr_prompt(
         "mitigation}; e cada review_trigger é {metric, operator, threshold, unit}. "
         "Para status provisional, decision deve ser null, confidence deve ser no máximo 0.60, "
         "assumptions não pode ser vazia e unresolved_questions deve conter de uma a três "
-        "perguntas realmente pendentes. "
+        "perguntas realmente pendentes; [] é inválido. Antes de responder, confira essa regra. "
         f"Problema: {problem}\n"
         f"Fatos: {facts}\nRestrições: {constraints}\n"
         f"Alternativas candidatas: {alternatives}"
         f"{resolved_context}"
+    )
+
+
+def build_adr_repair_prompt(
+    adr_contract: str, raw_output: str, findings: list[dict[str, Any]]
+) -> str:
+    """Ask for one auditable correction without changing the original output locally."""
+    return (
+        f"{adr_contract}\n\n"
+        "Corrija a resposta ADR abaixo e retorne somente o objeto JSON ADR completo em português, "
+        "com schema_version \"adr-v1\". "
+        "Não invente fatos: para uma lacuna real, use status provisional com assumptions e de uma "
+        "a três unresolved_questions; nunca retorne unresolved_questions vazio para provisional. "
+        "Cada item de unresolved_questions deve ser um objeto JSON, nunca uma string, exatamente "
+        "no formato {\"id\":\"pergunta-1\",\"question\":\"...\",\"impact\":\"...\"}. "
+        "Mantenha os fatos fornecidos quando forem válidos.\n"
+        f"Resposta original:\n{raw_output}\n"
+        "Erros de validação a corrigir:\n"
+        f"{json.dumps(findings, ensure_ascii=False)}"
     )

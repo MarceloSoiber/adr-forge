@@ -364,10 +364,9 @@ async def create_analysis_run(
     )
 
     now = datetime.now(UTC)
+    runtime = build_runtime(selected, settings)
     try:
-        generated = await DecisionService().execute(
-            build_runtime(selected, settings), revision, run.id, CancellationToken()
-        )
+        generated = await DecisionService().execute(runtime, revision, run.id, CancellationToken())
     except RuntimeError:
         failed = running.transition(
             RunStatus.FAILED,
@@ -402,6 +401,52 @@ async def create_analysis_run(
         "created_at": now,
     }
     await repository.add_validation_attempt(str(run.id), attempt)
+    attempts = [attempt]
+    repaired_artifact_id: str | None = None
+    if parsed.draft is None or any(finding.severity == "error" for finding in parsed.findings):
+        try:
+            repaired_generation = await runtime.repair(
+                revision,
+                generated.generation.raw_output,
+                [asdict(finding) for finding in parsed.findings],
+                cancellation=CancellationToken(),
+            )
+        except RuntimeError:
+            repaired_generation = None
+        if repaired_generation is not None:
+            repaired_parsed = DecisionService.parse(repaired_generation, run.id, revision)
+            repaired_bytes = repaired_generation.raw_output.encode("utf-8")
+            sha256, size_bytes, relative_path = await ArtifactStore(
+                request.app.state.settings.artifact_root
+            ).put_bytes(repaired_bytes)
+            repaired_artifact_id = await ArtifactRepository(
+                request.app.state.session_factory
+            ).create_raw_output(
+                sha256=sha256, relative_path=relative_path, size_bytes=size_bytes, created_at=now
+            )
+            await ArtifactRepository(request.app.state.session_factory).reference(
+                repaired_artifact_id, "analysis_run", run.id
+            )
+            repaired_attempt = {
+                "attempt": "repaired",
+                "artifact_id": repaired_artifact_id,
+                "parse_succeeded": repaired_parsed.parse_succeeded,
+                "schema_version": (
+                    repaired_parsed.draft.schema_version
+                    if repaired_parsed.draft is not None
+                    else None
+                ),
+                "findings": [asdict(finding) for finding in repaired_parsed.findings],
+                "created_at": now,
+            }
+            await repository.add_validation_attempt(str(run.id), repaired_attempt)
+            attempts.append(repaired_attempt)
+            if repaired_parsed.draft is not None and not any(
+                finding.severity == "error" for finding in repaired_parsed.findings
+            ):
+                parsed = repaired_parsed
+                generated = type(generated)(generation=repaired_generation, parsed=repaired_parsed)
+
     if parsed.draft is None or any(finding.severity == "error" for finding in parsed.findings):
         detail = "; ".join(finding.message for finding in parsed.findings[:3])
         invalid = running.transition(
@@ -411,9 +456,12 @@ async def create_analysis_run(
             failure_code="invalid_output",
             failure_detail=detail or "A resposta não segue o formato ADR esperado.",
             raw_output_artifact_id=UUID(artifact_id),
+            repaired_output_artifact_id=(
+                UUID(repaired_artifact_id) if repaired_artifact_id else None
+            ),
         )
         await repository.transition(
-            {**invalid.model_dump(mode="python"), "validation_attempts": [attempt]},
+            {**invalid.model_dump(mode="python"), "validation_attempts": attempts},
             running.progress_sequence,
         )
         persisted = await repository.get(str(run.id))
@@ -434,19 +482,22 @@ async def create_analysis_run(
         progress_percent=100,
         adr_draft_id=adr.id,
         raw_output_artifact_id=UUID(artifact_id),
+        repaired_output_artifact_id=(UUID(repaired_artifact_id) if repaired_artifact_id else None),
         input_tokens=generated.generation.telemetry.input_tokens,
         output_tokens=generated.generation.telemetry.output_tokens,
         latency_ms=generated.generation.telemetry.latency_ms,
         peak_vram_mb=generated.generation.telemetry.peak_vram_mb,
     )
-    completed_values = {**completed.model_dump(mode="python"), "validation_attempts": [attempt]}
+    completed_values = {**completed.model_dump(mode="python"), "validation_attempts": attempts}
     if not await repository.transition(completed_values, running.progress_sequence):
         raise ConflictError("Run changed while it was being completed")
     await repository.save_adr(str(run.id), adr.model_dump(mode="python"))
     persisted = await repository.get(str(run.id))
     if persisted is None:
         raise NotFoundError("Analysis run was not persisted")
-    persisted["validation_attempts"] = [{k: v for k, v in attempt.items() if k != "created_at"}]
+    persisted["validation_attempts"] = [
+        {k: v for k, v in item.items() if k != "created_at"} for item in attempts
+    ]
     return _run_response(persisted)
 
 

@@ -74,3 +74,33 @@ async def test_openai_compatible_runtime_honours_preexisting_cancellation() -> N
         await OpenAICompatibleStrategy(base_url=BASE_URL, model_id="qwen").generate(
             _scenario(), cancellation=cancellation
         )
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_openai_compatible_runtime_sends_raw_output_and_findings_for_one_repair() -> None:
+    route = respx.post(f"{BASE_URL}/v1/chat/completions").mock(
+        return_value=httpx.Response(
+            200,
+            json={"choices": [{"message": {"content": '{"title": "ADR"}'}}]},
+        )
+    )
+
+    await OpenAICompatibleStrategy(base_url=BASE_URL, model_id="qwen").repair(
+        _scenario(),
+        '{"status":"provisional","unresolved_questions":[]}',
+        [
+            {
+                "code": "unresolved_questions.required",
+                "path": "/unresolved_questions",
+                "severity": "error",
+                "message": "A provisional ADR requires one to three unresolved questions.",
+            }
+        ],
+        cancellation=CancellationToken(),
+    )
+
+    content = route.calls[0].request.content.decode()
+    assert "unresolved_questions.required" in content
+    assert "nunca retorne unresolved_questions vazio" in content
+    assert '"id\\\":\\\"pergunta-1\\\"' in content

@@ -19,7 +19,9 @@ class ParseResult:
     parse_succeeded: bool
 
 
-def parse_adr_output(raw_output: str, analysis_run_id: UUID) -> ParseResult:
+def parse_adr_output(
+    raw_output: str, analysis_run_id: UUID, *, answered_questions: list[str] | None = None
+) -> ParseResult:
     """Parse a model response without altering its content or inventing fields."""
     try:
         payload = json.loads(raw_output)
@@ -66,7 +68,7 @@ def parse_adr_output(raw_output: str, analysis_run_id: UUID) -> ParseResult:
                 for item in error.errors()
             ],
         )
-    findings = validate_adr_draft(draft)
+    findings = validate_adr_draft(draft, answered_questions=answered_questions)
     return ParseResult(draft=draft, findings=findings, parse_succeeded=True)
 
 

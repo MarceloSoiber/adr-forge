@@ -9,6 +9,7 @@ from time import perf_counter
 from typing import Any
 
 from adr_forge.scenarios.models import ScenarioRevision
+from adr_forge.shared.adr_prompt import build_adr_repair_prompt
 from adr_forge.shared.chat_prompt import render_assistant_prompt
 from adr_forge.shared.model_identity import require_immutable_model_revision
 from adr_forge.strategies.base import (
@@ -37,6 +38,20 @@ class QwenRuntime(StructuredOutputStrategy):
         cancellation.raise_if_cancelled()
         return await asyncio.to_thread(
             self._generate_blocking, build_adr_prompt(scenario), cancellation
+        )
+
+    async def repair(
+        self,
+        scenario: ScenarioRevision,
+        raw_output: str,
+        findings: list[dict[str, Any]],
+        *,
+        cancellation: CancellationToken,
+    ) -> GenerationResult:
+        return await asyncio.to_thread(
+            self._generate_blocking,
+            build_adr_repair_prompt(build_adr_prompt(scenario), raw_output, findings),
+            cancellation,
         )
 
     def _generate_blocking(self, prompt: str, cancellation: CancellationToken) -> GenerationResult:

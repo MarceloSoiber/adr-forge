@@ -89,6 +89,33 @@ def test_proposed_adr_requires_two_viable_alternatives() -> None:
     assert "alternatives.minimum_viable" in _finding_codes(draft)
 
 
+def test_provisional_adr_rejects_a_question_already_answered() -> None:
+    question = UnresolvedQuestion(
+        id="integrity",
+        question="Como garantir a integridade dos dados financeiros?",
+        impact="Define os controles transacionais.",
+    )
+    draft = _validated_copy(
+        _proposed_draft(),
+        status="provisional",
+        decision=None,
+        assumptions=[
+            Assumption(
+                id="uncertain",
+                statement="A resposta ainda precisa ser aplicada à decisão.",
+                impact="Mantém a recomendação provisória.",
+                confidence=0.5,
+            )
+        ],
+        unresolved_questions=[question],
+        confidence=0.5,
+    )
+
+    findings = validate_adr_draft(draft, answered_questions=[question.question])
+
+    assert "unresolved_questions.already_answered" in {finding.code for finding in findings}
+
+
 def test_proposed_adr_requires_negative_consequences() -> None:
     draft = _proposed_draft().model_copy(update={"negative_consequences": []})
 

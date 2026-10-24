@@ -41,6 +41,15 @@ class StructuredOutputStrategy(Protocol):
         self, scenario: ScenarioRevision, *, cancellation: CancellationToken
     ) -> GenerationResult: ...
 
+    async def repair(
+        self,
+        scenario: ScenarioRevision,
+        raw_output: str,
+        findings: list[dict[str, Any]],
+        *,
+        cancellation: CancellationToken,
+    ) -> GenerationResult: ...
+
 
 def build_adr_prompt(scenario: ScenarioRevision) -> str:
     """Build the same unprivileged structured-output prompt for every baseline."""

@@ -9,6 +9,7 @@ from typing import Any
 import httpx
 
 from adr_forge.scenarios.models import ScenarioRevision
+from adr_forge.shared.adr_prompt import build_adr_repair_prompt
 from adr_forge.strategies.base import (
     GenerationResult,
     GenerationTelemetry,
@@ -30,11 +31,28 @@ class OpenAICompatibleStrategy:
         self, scenario: ScenarioRevision, *, cancellation: CancellationToken
     ) -> GenerationResult:
         cancellation.raise_if_cancelled()
+        return await self._complete(build_adr_prompt(scenario), cancellation=cancellation)
+
+    async def repair(
+        self,
+        scenario: ScenarioRevision,
+        raw_output: str,
+        findings: list[dict[str, Any]],
+        *,
+        cancellation: CancellationToken,
+    ) -> GenerationResult:
+        return await self._complete(
+            build_adr_repair_prompt(build_adr_prompt(scenario), raw_output, findings),
+            cancellation=cancellation,
+        )
+
+    async def _complete(self, prompt: str, *, cancellation: CancellationToken) -> GenerationResult:
+        cancellation.raise_if_cancelled()
         started = perf_counter()
         headers = {"Authorization": f"Bearer {self.api_key}"} if self.api_key else {}
         payload = {
             "model": self.model_id,
-            "messages": [{"role": "user", "content": build_adr_prompt(scenario)}],
+            "messages": [{"role": "user", "content": prompt}],
             "temperature": 0,
             "max_tokens": 1024,
             "stream": False,

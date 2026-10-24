@@ -31,5 +31,16 @@ class DecisionService:
         cancellation.raise_if_cancelled()
         return GeneratedDecision(
             generation=generation,
-            parsed=parse_adr_output(generation.raw_output, run_id),
+            parsed=self.parse(generation, run_id, scenario),
+        )
+
+    @staticmethod
+    def parse(
+        generation: GenerationResult, run_id: UUID, scenario: ScenarioRevision
+    ) -> ParseResult:
+        """Validate an already captured generation without modifying its raw response."""
+        return parse_adr_output(
+            generation.raw_output,
+            run_id,
+            answered_questions=[answer.question for answer in scenario.clarification_answers],
         )
