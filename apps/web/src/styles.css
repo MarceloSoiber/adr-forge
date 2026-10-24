@@ -446,6 +446,59 @@ textarea {
   }
 }
 
+/* Dataset workspace — an editorial inventory for training provenance. */
+.dataset-workspace { display: grid; gap: 1rem; }
+.dataset-hero { display: grid; grid-template-columns: minmax(0, 1fr) 14rem; gap: 2rem; align-items: end; padding: 1.2rem 0 1.5rem; }
+.dataset-hero h1 { max-width: 42rem; margin: .45rem 0 .7rem; color: #27233f; font-family: Georgia, 'Times New Roman', serif; font-size: clamp(2.45rem, 4.5vw, 4.1rem); line-height: .96; }
+.dataset-hero > div > p:last-child { max-width: 43rem; margin: 0; color: #6e687b; line-height: 1.55; }
+.dataset-hero__stamp { display: grid; gap: .45rem; padding: 1rem; border-top: 2px solid #27233f; border-bottom: 1px solid #d8d0c4; color: #595367; }
+.dataset-hero__stamp strong { color: #d4684c; font: 800 .75rem ui-monospace, monospace; letter-spacing: .08em; }
+.dataset-hero__stamp span, .dataset-hero__stamp code { font-size: .72rem; }
+.dataset-hero__stamp code { color: #858093; }
+.dataset-metrics { display: grid; grid-template-columns: repeat(4, 1fr); border: 1px solid #ddd7cd; border-radius: .8rem; background: #fffdf8; }
+.dataset-metrics > div { display: grid; gap: .25rem; padding: 1rem 1.15rem; }
+.dataset-metrics > div + div { border-left: 1px solid #e8e2d8; }
+.dataset-metric__value { color: #27233f; font: 800 1.7rem Georgia, serif; }
+.dataset-metric__label { color: #858093; font-size: .72rem; }
+.dataset-metric__label i { color: #4e857a; font-style: normal; font-weight: 800; }
+.dataset-content { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(16rem, .7fr); gap: 1rem; }
+.dataset-table-panel, .dataset-side-panel { min-width: 0; border: 1px solid #ddd7cd; border-radius: .8rem; background: #fffdf8; }
+.dataset-table-panel { overflow: hidden; }
+.dataset-section-heading { display: flex; justify-content: space-between; gap: 1rem; align-items: end; padding: 1.35rem 1.35rem 1rem; }
+.dataset-section-heading h2, .dataset-side-panel h2 { margin: .25rem 0 0; color: #27233f; font-size: 1.3rem; }
+.dataset-tabs { display: flex; gap: .25rem; padding: .25rem; border-radius: .45rem; background: #f1ece5; }
+.dataset-tabs button { border: 0; border-radius: .3rem; padding: .45rem .6rem; cursor: pointer; color: #858093; background: transparent; font-size: .72rem; font-weight: 700; }
+.dataset-tabs button.active, .dataset-tabs button:hover { color: #27233f; background: #fffdf8; box-shadow: 0 1px 3px #d8d0c4; }
+.dataset-table-wrap { overflow-x: auto; border-top: 1px solid #e8e2d8; border-bottom: 1px solid #e8e2d8; }
+.dataset-table-wrap table { width: 100%; border-collapse: collapse; min-width: 37rem; }
+.dataset-table-wrap th { padding: .7rem 1.35rem; color: #a09aaa; background: #faf7f1; font: 700 .63rem ui-monospace, monospace; letter-spacing: .08em; text-align: left; text-transform: uppercase; }
+.dataset-table-wrap td { padding: .8rem 1.35rem; border-top: 1px solid #eee9e1; color: #6e687b; font-size: .78rem; white-space: nowrap; }
+.dataset-table-wrap td:first-child { white-space: normal; }
+.dataset-table-wrap td:first-child strong, .dataset-table-wrap td:first-child span { display: block; }
+.dataset-table-wrap td:first-child strong { color: #a04a37; font: 700 .65rem ui-monospace, monospace; }
+.dataset-table-wrap td:first-child span { margin-top: .2rem; color: #27233f; font-weight: 700; }
+.split-badge, .record-status { display: inline-flex; gap: .35rem; align-items: center; border-radius: 2rem; padding: .3rem .5rem; font-size: .66rem; font-weight: 700; }
+.split-badge--treinamento { color: #765b22; background: #fff1c9; }
+.split-badge--validacao { color: #426c65; background: #dff2ed; }
+.record-status { padding: 0; color: #4e857a; font-weight: 600; }
+.record-status--review { color: #a16b22; }
+.record-status i { width: .35rem; height: .35rem; border-radius: 50%; background: currentColor; }
+.token-count { color: #858093 !important; font-family: ui-monospace, monospace; }
+.dataset-table-note { margin: 0; padding: .85rem 1.35rem; color: #858093; font-size: .7rem; }
+.dataset-table-note code { color: #a04a37; }
+.dataset-side-panel { padding: 1.35rem; border-top: 3px solid #d4684c; }
+.dataset-side-panel > p:not(.section-kicker) { margin: .8rem 0 1.25rem; color: #6e687b; font-size: .84rem; line-height: 1.55; }
+.dataset-side-panel dl { margin: 0; border-top: 1px solid #e8e2d8; }
+.dataset-side-panel dl div { display: flex; justify-content: space-between; gap: 1rem; padding: .75rem 0; border-bottom: 1px solid #e8e2d8; }
+.dataset-side-panel dt { color: #858093; font-size: .72rem; }
+.dataset-side-panel dd { margin: 0; color: #27233f; font-size: .72rem; font-weight: 700; text-align: right; }
+.dataset-check { display: flex; gap: .65rem; align-items: center; margin-top: 1.25rem; padding: .75rem; border-radius: .5rem; background: #eef8f4; }
+.dataset-check > span { color: #4e857a; font-size: 1.2rem; font-weight: 900; }
+.dataset-check p { margin: 0; color: #426c65; font-size: .75rem; }
+.dataset-check strong, .dataset-check small { display: block; }
+.dataset-check small { margin-top: .2rem; color: #6d9a91; font-size: .68rem; }
+@media (max-width: 760px) { .dataset-hero, .dataset-content { grid-template-columns: 1fr; } .dataset-hero__stamp { justify-self: start; } .dataset-metrics { grid-template-columns: 1fr 1fr; } .dataset-metrics > div:nth-child(3) { border-left: 0; border-top: 1px solid #e8e2d8; } .dataset-metrics > div:nth-child(4) { border-top: 1px solid #e8e2d8; } .dataset-section-heading { align-items: start; flex-direction: column; } }
+
 /* Application shell — light editorial control room */
 :root {
   color: #27233f;
@@ -868,6 +921,134 @@ textarea:focus {
   color: #a04a37;
   outline: none;
 }
+
+/* About page — a compact editorial manifesto for the project. */
+.about-page {
+  display: grid;
+  gap: 1rem;
+}
+.about-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 13rem;
+  gap: 2rem;
+  align-items: end;
+  padding: 1.2rem 0 1.5rem;
+  border-bottom: 1px solid #ddd7cd;
+}
+.about-hero h1 {
+  max-width: 46rem;
+  margin: 0.5rem 0 0.8rem;
+  color: #27233f;
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: clamp(2.7rem, 5vw, 4.8rem);
+  line-height: 0.94;
+}
+.about-lede {
+  max-width: 42rem;
+  margin: 0;
+  color: #6e687b;
+  font-size: 1rem;
+  line-height: 1.6;
+}
+.about-mark {
+  display: grid;
+  gap: 0.7rem;
+  justify-items: start;
+  padding: 1rem;
+  border-top: 2px solid #27233f;
+  border-bottom: 1px solid #d8d0c4;
+}
+.about-mark span {
+  color: #d4684c;
+  font: 900 2rem/1 ui-monospace, monospace;
+  letter-spacing: -0.1em;
+}
+.about-mark small {
+  color: #858093;
+  font: 0.67rem ui-monospace, monospace;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.about-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+.about-card,
+.about-lab {
+  border: 1px solid #ddd7cd;
+  border-radius: 0.8rem;
+  background: #fffdf8;
+}
+.about-card {
+  min-height: 17rem;
+  padding: 1.5rem;
+}
+.about-card--feature {
+  border-top: 3px solid #27233f;
+}
+.about-card--accent {
+  border-top: 3px solid #d4684c;
+  background: #fff7f1;
+}
+.about-card__label {
+  margin-bottom: 2.5rem;
+  color: #b85e46;
+  font: 700 0.68rem ui-monospace, monospace;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.about-card h2,
+.about-lab h2 {
+  max-width: 27rem;
+  margin: 0 0 0.75rem;
+  color: #27233f;
+  font-size: 1.45rem;
+  line-height: 1.08;
+}
+.about-card p:last-child,
+.about-lab__heading > p {
+  max-width: 34rem;
+  margin-bottom: 0;
+  color: #6e687b;
+  font-size: 0.88rem;
+  line-height: 1.6;
+}
+.about-lab {
+  display: grid;
+  grid-template-columns: minmax(14rem, 0.85fr) minmax(0, 1.5fr);
+  gap: 2rem;
+  padding: 1.5rem;
+}
+.about-lab__heading h2 {
+  margin-top: 0.45rem;
+}
+.about-principles {
+  display: grid;
+  gap: 0.7rem;
+}
+.about-principle {
+  display: grid;
+  grid-template-columns: 2.2rem 1fr;
+  gap: 0.8rem;
+  padding-top: 0.7rem;
+  border-top: 1px solid #e8e2d8;
+}
+.about-principle > span {
+  color: #d4684c;
+  font: 700 0.72rem ui-monospace, monospace;
+}
+.about-principle h3 {
+  margin: 0;
+  color: #27233f;
+  font-size: 0.9rem;
+}
+.about-principle p {
+  margin: 0.3rem 0 0;
+  color: #6e687b;
+  font-size: 0.8rem;
+  line-height: 1.45;
+}
 @media (max-width: 760px) {
   .app-shell {
     display: block;
@@ -899,6 +1080,23 @@ textarea:focus {
   }
   .clarification-panel__actions > button {
     width: 100%;
+  }
+  .about-hero,
+  .about-grid,
+  .about-lab {
+    grid-template-columns: 1fr;
+  }
+  .about-hero {
+    gap: 1.25rem;
+  }
+  .about-mark {
+    justify-self: start;
+  }
+  .about-card {
+    min-height: auto;
+  }
+  .about-card__label {
+    margin-bottom: 1.5rem;
   }
 }
 

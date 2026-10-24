@@ -55,8 +55,8 @@ export function RunProgress({
             A saída do modelo não confere com o formato ADR esperado.
           </strong>
           <p>
-            O modelo não retornou um ADR em JSON válido. Revise a resposta
-            recebida abaixo para entender o formato gerado.
+            O modelo retornou uma resposta que não atende ao esquema ADR. Revise
+            os campos indicados e a resposta recebida abaixo.
           </p>
           {findings.length > 0 && (
             <details>

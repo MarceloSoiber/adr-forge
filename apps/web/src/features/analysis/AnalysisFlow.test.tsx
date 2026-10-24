@@ -434,7 +434,7 @@ describe('AnalysisFlow', () => {
 
     expect(
       await screen.findByText(
-        'O modelo não retornou um ADR em JSON válido. Revise a resposta recebida abaixo para entender o formato gerado.',
+        'O modelo retornou uma resposta que não atende ao esquema ADR. Revise os campos indicados e a resposta recebida abaixo.',
       ),
     ).toBeInTheDocument()
     expect(

@@ -1,9 +1,11 @@
 import { useState } from 'react'
 
 import { AnalysisFlow } from './features/analysis/AnalysisFlow'
+import { AboutPage } from './features/about/AboutPage'
 import { TrainingDashboard } from './features/training/TrainingDashboard'
+import { DatasetPage } from './features/dataset/DatasetPage'
 
-type WorkspaceView = 'analysis' | 'training'
+type WorkspaceView = 'analysis' | 'training' | 'dataset' | 'about'
 
 type NavigationItem = {
   label: string
@@ -15,7 +17,8 @@ const navigation: NavigationItem[] = [
   { label: 'Testar IA', icon: '✦', view: 'analysis' },
   { label: 'Treinamento', icon: '◌', view: 'training' },
   { label: 'Experimentos', icon: '⌁' },
-  { label: 'Base de dados', icon: '▣' },
+  { label: 'Base de dados', icon: '▣', view: 'dataset' },
+  { label: 'Sobre', icon: 'i', view: 'about' },
 ]
 
 export function App() {
@@ -75,7 +78,15 @@ export function App() {
             <button type="button">MS</button>
           </div>
         </header>
-        {view === 'analysis' ? <AnalysisFlow /> : <TrainingDashboard />}
+        {view === 'analysis' ? (
+          <AnalysisFlow />
+        ) : view === 'training' ? (
+          <TrainingDashboard />
+        ) : view === 'dataset' ? (
+          <DatasetPage />
+        ) : (
+          <AboutPage />
+        )}
       </div>
     </div>
   )

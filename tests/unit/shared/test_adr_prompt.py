@@ -26,6 +26,15 @@ def test_prompt_carries_answered_clarifications_and_avoids_repetition() -> None:
     assert "conclua o ADR" in prompt
 
 
+def test_prompt_describes_the_nested_adr_contract() -> None:
+    prompt = build_adr_prompt("Escolher a persistência.", [], [], [])
+
+    assert 'schema_version deve ser "adr-v1"' in prompt
+    assert "context, facts, constraints" in prompt
+    assert "Cada assumption é {id, statement, impact, confidence}" in prompt
+    assert "unresolved_question é {id, question, impact}" in prompt
+
+
 def test_strategy_prompt_includes_persisted_clarification_answers() -> None:
     scenario = ScenarioRevision(
         scenario_id=uuid4(),
