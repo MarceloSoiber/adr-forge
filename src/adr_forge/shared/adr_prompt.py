@@ -21,7 +21,13 @@ def build_adr_prompt(
             "pergunte somente sobre lacunas novas."
         )
     return (
-        "Gere somente JSON para um ADR em português. Não invente fatos. "
+        "Gere somente um objeto JSON ADR em português. Não invente fatos. "
+        "Use exatamente estas chaves em snake_case: schema_version, title, status, context, "
+        "facts, assumptions, unresolved_questions, constraints, alternatives, decision, "
+        "rationale, positive_consequences, negative_consequences, risks, review_triggers, "
+        "confidence, reference_ids. Não use camelCase, campos extras, null em listas ou "
+        "objetos em facts e constraints. Para status provisional, decision deve ser null e "
+        "unresolved_questions deve conter somente perguntas realmente pendentes. "
         f"Problema: {problem}\n"
         f"Fatos: {facts}\nRestrições: {constraints}\n"
         f"Alternativas candidatas: {alternatives}"

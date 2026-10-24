@@ -23,34 +23,6 @@ const terminalRunStatuses = new Set([
   'interrupted',
 ])
 
-function extractClarificationQuestions(rawOutput: string): Array<{
-  id: string
-  question: string
-  impact: string
-}> {
-  try {
-    const payload: unknown = JSON.parse(rawOutput)
-    if (!payload || typeof payload !== 'object') return []
-    const questions = (payload as { unresolved_questions?: unknown })
-      .unresolved_questions
-    if (!Array.isArray(questions)) return []
-    return questions
-      .filter(
-        (question): question is { id: string; question: string; impact: string } =>
-          Boolean(
-            question &&
-              typeof question === 'object' &&
-              typeof (question as { id?: unknown }).id === 'string' &&
-              typeof (question as { question?: unknown }).question === 'string' &&
-              typeof (question as { impact?: unknown }).impact === 'string',
-          ),
-      )
-      .slice(0, 3)
-  } catch {
-    return []
-  }
-}
-
 export function AnalysisFlow() {
   const [strategies, setStrategies] = useState<Strategy[]>([])
   const [title, setTitle] = useState('')
@@ -62,9 +34,6 @@ export function AnalysisFlow() {
   const [run, setRun] = useState<AnalysisRun | null>(null)
   const [adr, setAdr] = useState<Adr | null>(null)
   const [rawOutput, setRawOutput] = useState<string | null>(null)
-  const [modelQuestions, setModelQuestions] = useState<
-    Array<{ id: string; question: string; impact: string }>
-  >([])
   const [scenario, setScenario] = useState<Scenario | null>(null)
   const [showClarification, setShowClarification] = useState(true)
   const [error, setError] = useState<ProblemDetail | null>(null)
@@ -97,10 +66,8 @@ export function AnalysisFlow() {
     try {
       const output = await analysisApi.getRunOutput(id)
       setRawOutput(output)
-      setModelQuestions(extractClarificationQuestions(output))
     } catch {
       setRawOutput(null)
-      setModelQuestions([])
     }
   }
 
@@ -162,7 +129,6 @@ export function AnalysisFlow() {
       setRun(next)
       setAdr(null)
       setRawOutput(null)
-      setModelQuestions([])
       setShowClarification(true)
       if (next.status === 'invalid_output') await loadRawOutput(next.id)
       subscribe(next.id)
@@ -190,36 +156,40 @@ export function AnalysisFlow() {
     answers: Array<{ question_id: string; answer: string }>,
   ) {
     if (!scenario || !run || !strategy) return
-    let revision
+    setIsStarting(true)
     try {
-      revision = await analysisApi.createRevision(scenario.id, {
-        base_revision_number: scenario.current_revision.revision_number,
-        clarification_answers: answers.map((answer) => ({
-          ...answer,
-          source_run_id: run.id,
-        })),
-      })
-    } catch (reason) {
-      if ((reason as ProblemDetail).status === 409) {
-        setScenario(await analysisApi.getScenario(scenario.id))
+      let revision
+      try {
+        revision = await analysisApi.createRevision(scenario.id, {
+          base_revision_number: scenario.current_revision.revision_number,
+          clarification_answers: answers.map((answer) => ({
+            ...answer,
+            source_run_id: run.id,
+          })),
+        })
+      } catch (reason) {
+        if ((reason as ProblemDetail).status === 409) {
+          setScenario(await analysisApi.getScenario(scenario.id))
+        }
+        throw reason
       }
-      throw reason
+      const selected = strategies.find((item) => item.id === strategy)
+      if (!selected) return
+      const next = await analysisApi.createRun({
+        scenario_revision_id: revision.id,
+        strategy_id: selected.id,
+        strategy_version: selected.version,
+      })
+      eventSource.current?.close()
+      setScenario({ ...scenario, current_revision: revision })
+      setAdr(null)
+      setRawOutput(null)
+      setRun(next)
+      setShowClarification(true)
+      subscribe(next.id)
+    } finally {
+      setIsStarting(false)
     }
-    const selected = strategies.find((item) => item.id === strategy)
-    if (!selected) return
-    const next = await analysisApi.createRun({
-      scenario_revision_id: revision.id,
-      strategy_id: selected.id,
-      strategy_version: selected.version,
-    })
-    eventSource.current?.close()
-    setScenario({ ...scenario, current_revision: revision })
-    setAdr(null)
-    setRawOutput(null)
-    setModelQuestions([])
-    setRun(next)
-    setShowClarification(true)
-    subscribe(next.id)
   }
 
   return (
@@ -249,25 +219,17 @@ export function AnalysisFlow() {
         run={run}
         rawOutput={rawOutput}
         isStarting={isStarting}
-        hasClarificationQuestions={modelQuestions.length > 0}
       />
       <AdrView adr={adr} onExport={() => void exportMarkdown()} />
       {showClarification &&
+        !isStarting &&
         scenario &&
         run &&
-        ((run.status === 'needs_clarification' &&
-          adr?.status === 'provisional' &&
-          (adr.unresolved_questions ?? []).length > 0) ||
-          (run.status === 'invalid_output' && modelQuestions.length > 0)) && (
+        run.status === 'needs_clarification' &&
+        adr?.status === 'provisional' &&
+        (adr.unresolved_questions ?? []).length > 0 && (
           <ClarificationPanel
-            questions={
-              run.status === 'needs_clarification'
-                ? adr?.unresolved_questions ?? []
-                : modelQuestions
-            }
-            source={
-              run.status === 'invalid_output' ? 'model_output' : 'provisional_adr'
-            }
+            questions={adr.unresolved_questions ?? []}
             onSubmit={submitClarification}
             onContinue={() => setShowClarification(false)}
           />

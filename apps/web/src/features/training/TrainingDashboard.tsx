@@ -29,8 +29,8 @@ const profiles: TrainingProfile[] = [
     label: 'Treino completo',
     description:
       'Usa o dataset versionado para gerar um adaptador QLoRA de produção local.',
-    config: 'configs/training/qwen3-4b-adr-json.yaml',
-    dataset: 'data/datasets/v0.2.0-adr-json/training.jsonl',
+    config: 'configs/training/qwen3-4b-adr-contract-v3.yaml',
+    dataset: 'data/datasets/v0.3.0-adr-contract/training.jsonl',
     epochs: '3 épocas',
     context: '2.048 tokens',
     badge: 'requer dataset gerado',
@@ -191,12 +191,12 @@ export function TrainingDashboard() {
             >
               <code>
                 uv run adr-forge dataset validate --manifest
-                datasets/manifests/v0.2.0-adr-json.json
+                datasets/manifests/v0.3.0-adr-contract.json
               </code>
               <code>
                 uv run adr-forge dataset build --manifest
-                datasets/manifests/v0.2.0-adr-json.json --output
-                data/datasets/v0.2.0-adr-json/training.jsonl
+                datasets/manifests/v0.3.0-adr-contract.json --output
+                data/datasets/v0.3.0-adr-contract/training.jsonl
               </code>
             </div>
           </div>

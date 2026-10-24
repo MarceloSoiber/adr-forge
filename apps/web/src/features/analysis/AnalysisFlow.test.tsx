@@ -128,10 +128,6 @@ function jsonResponse(body: unknown, status = 200): Response {
   })
 }
 
-function textResponse(body: string, status = 200): Response {
-  return new Response(body, { status, headers: { 'Content-Type': 'text/plain' } })
-}
-
 class EventSourceMock {
   static instances: EventSourceMock[] = []
   onmessage: ((event: MessageEvent<string>) => void) | null = null
@@ -453,61 +449,4 @@ describe('AnalysisFlow', () => {
     ).toBe(false)
   })
 
-  it('permite responder às perguntas da saída inválida e tentar uma nova análise', async () => {
-    const invalidRun = {
-      ...pendingRun,
-      status: 'invalid_output',
-      stage: 'saída inválida',
-      progress_percent: 100,
-      validation_attempts: [],
-    }
-    const revisedRevision = { ...scenario.current_revision, id: '00000000-0000-0000-0000-000000000005', revision_number: 2 }
-    const modelOutput = JSON.stringify({
-      unresolved_questions: [
-        {
-          id: 'question-context',
-          question: 'Qual volume de transações deve ser suportado?',
-          impact: 'O volume pode alterar a decisão de arquitetura.',
-        },
-      ],
-    })
-    fetchMock
-      .mockResolvedValueOnce(jsonResponse([strategy]))
-      .mockResolvedValueOnce(jsonResponse(scenario, 201))
-      .mockResolvedValueOnce(jsonResponse(pendingRun, 202))
-      .mockResolvedValueOnce(jsonResponse(invalidRun))
-      .mockResolvedValueOnce(textResponse(modelOutput))
-      .mockResolvedValueOnce(jsonResponse(revisedRevision, 201))
-      .mockResolvedValueOnce(jsonResponse({ ...pendingRun, id: '00000000-0000-0000-0000-000000000006', scenario_revision_id: revisedRevision.id }, 202))
-
-    renderFlow()
-    const user = await completeForm()
-    await user.click(screen.getByRole('button', { name: 'Analisar decisão' }))
-    await waitFor(() => expect(EventSourceMock.instances).toHaveLength(1))
-    EventSourceMock.instances[0]?.emit({ ...invalidRun, run_id: runId })
-
-    await user.type(
-      await screen.findByLabelText('Qual volume de transações deve ser suportado?'),
-      'Até 20 mil transações por minuto.',
-    )
-    await user.click(
-      screen.getByRole('button', { name: 'Responder e continuar análise' }),
-    )
-
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(7))
-    expect(JSON.parse(String(fetchMock.mock.calls[5]?.[1]?.body))).toEqual({
-      base_revision_number: 1,
-      clarification_answers: [
-        {
-          question_id: 'question-context',
-          answer: 'Até 20 mil transações por minuto.',
-          source_run_id: runId,
-        },
-      ],
-    })
-    expect(JSON.parse(String(fetchMock.mock.calls[6]?.[1]?.body))).toMatchObject({
-      scenario_revision_id: revisedRevision.id,
-      strategy_id: strategy.id,
-    })
-  })
 })

@@ -17,7 +17,6 @@ from pydantic import BaseModel, ConfigDict, Field
 from adr_forge.artifacts.repository import ArtifactRepository
 from adr_forge.artifacts.store import ArtifactStore
 from adr_forge.decisions.rendering import render_markdown
-from adr_forge.decisions.repair import repair_adr_json
 from adr_forge.decisions.schemas import ADRDraft as DomainADRDraft
 from adr_forge.decisions.schemas import (
     ADRStatus,
@@ -367,11 +366,7 @@ async def create_analysis_run(
     now = datetime.now(UTC)
     try:
         generated = await DecisionService().execute(
-            build_runtime(selected, settings),
-            revision,
-            run.id,
-            CancellationToken(),
-            repair=repair_adr_json,
+            build_runtime(selected, settings), revision, run.id, CancellationToken()
         )
     except RuntimeError:
         failed = running.transition(
@@ -387,7 +382,7 @@ async def create_analysis_run(
         persisted = await repository.get(str(run.id))
         assert persisted is not None
         return _run_response(persisted)
-    original_parsed = generated.parsed.original
+    parsed = generated.parsed
     raw_output = generated.generation.raw_output.encode("utf-8")
     sha256, size_bytes, relative_path = await ArtifactStore(
         request.app.state.settings.artifact_root
@@ -398,52 +393,15 @@ async def create_analysis_run(
     await ArtifactRepository(request.app.state.session_factory).reference(
         artifact_id, "analysis_run", run.id
     )
-    original_attempt = {
+    attempt = {
         "attempt": "original",
         "artifact_id": artifact_id,
-        "parse_succeeded": original_parsed.parse_succeeded,
-        "schema_version": (
-            original_parsed.draft.schema_version if original_parsed.draft is not None else None
-        ),
-        "findings": [asdict(finding) for finding in original_parsed.findings],
+        "parse_succeeded": parsed.parse_succeeded,
+        "schema_version": parsed.draft.schema_version if parsed.draft is not None else None,
+        "findings": [asdict(finding) for finding in parsed.findings],
         "created_at": now,
     }
-    await repository.add_validation_attempt(str(run.id), original_attempt)
-
-    attempts = [original_attempt]
-    parsed = original_parsed
-    repaired_artifact_id: str | None = None
-    if generated.parsed.repaired is not None and generated.parsed.repaired_output is not None:
-        repaired_output = generated.parsed.repaired_output.encode("utf-8")
-        repaired_sha256, repaired_size, repaired_path = await ArtifactStore(
-            request.app.state.settings.artifact_root
-        ).put_bytes(repaired_output)
-        repaired_artifact_id = await ArtifactRepository(
-            request.app.state.session_factory
-        ).create_raw_output(
-            sha256=repaired_sha256,
-            relative_path=repaired_path,
-            size_bytes=repaired_size,
-            created_at=now,
-        )
-        await ArtifactRepository(request.app.state.session_factory).reference(
-            repaired_artifact_id, "analysis_run", run.id
-        )
-        repaired = generated.parsed.repaired
-        repaired_attempt = {
-            "attempt": "repaired",
-            "artifact_id": repaired_artifact_id,
-            "parse_succeeded": repaired.parse_succeeded,
-            "schema_version": repaired.draft.schema_version if repaired.draft is not None else None,
-            "findings": [asdict(finding) for finding in repaired.findings],
-            "created_at": now,
-        }
-        await repository.add_validation_attempt(str(run.id), repaired_attempt)
-        attempts.append(repaired_attempt)
-        if repaired.draft is not None and not any(
-            finding.severity == "error" for finding in repaired.findings
-        ):
-            parsed = repaired
+    await repository.add_validation_attempt(str(run.id), attempt)
     if parsed.draft is None or any(finding.severity == "error" for finding in parsed.findings):
         detail = "; ".join(finding.message for finding in parsed.findings[:3])
         invalid = running.transition(
@@ -453,12 +411,9 @@ async def create_analysis_run(
             failure_code="invalid_output",
             failure_detail=detail or "A resposta não segue o formato ADR esperado.",
             raw_output_artifact_id=UUID(artifact_id),
-            repaired_output_artifact_id=(
-                UUID(repaired_artifact_id) if repaired_artifact_id is not None else None
-            ),
         )
         await repository.transition(
-            {**invalid.model_dump(mode="python"), "validation_attempts": attempts},
+            {**invalid.model_dump(mode="python"), "validation_attempts": [attempt]},
             running.progress_sequence,
         )
         persisted = await repository.get(str(run.id))
@@ -479,24 +434,19 @@ async def create_analysis_run(
         progress_percent=100,
         adr_draft_id=adr.id,
         raw_output_artifact_id=UUID(artifact_id),
-        repaired_output_artifact_id=(
-            UUID(repaired_artifact_id) if repaired_artifact_id is not None else None
-        ),
         input_tokens=generated.generation.telemetry.input_tokens,
         output_tokens=generated.generation.telemetry.output_tokens,
         latency_ms=generated.generation.telemetry.latency_ms,
         peak_vram_mb=generated.generation.telemetry.peak_vram_mb,
     )
-    completed_values = {**completed.model_dump(mode="python"), "validation_attempts": attempts}
+    completed_values = {**completed.model_dump(mode="python"), "validation_attempts": [attempt]}
     if not await repository.transition(completed_values, running.progress_sequence):
         raise ConflictError("Run changed while it was being completed")
     await repository.save_adr(str(run.id), adr.model_dump(mode="python"))
     persisted = await repository.get(str(run.id))
     if persisted is None:
         raise NotFoundError("Analysis run was not persisted")
-    persisted["validation_attempts"] = [
-        {k: v for k, v in attempt.items() if k != "created_at"} for attempt in attempts
-    ]
+    persisted["validation_attempts"] = [{k: v for k, v in attempt.items() if k != "created_at"}]
     return _run_response(persisted)
 
 

@@ -11,7 +11,7 @@ describe('RunProgress', () => {
       screen.getByText('Carregando o modelo na GPU…'),
     ).toBeInTheDocument()
     expect(
-      screen.getByText(/primeira execução, o carregamento e a quantização/i),
+      screen.getByText(/carregamento e a preparação do modelo/i),
     ).toBeInTheDocument()
   })
 })

@@ -4,16 +4,12 @@ export function RunProgress({
   run,
   rawOutput,
   isStarting = false,
-  hasClarificationQuestions = false,
 }: {
   run: AnalysisRun | null
   rawOutput: string | null
   isStarting?: boolean
-  hasClarificationQuestions?: boolean
 }) {
-  if (!run && !isStarting) return null
-
-  if (!run) {
+  if (isStarting) {
     return (
       <section className="run-progress" aria-live="polite">
         <div>
@@ -22,8 +18,7 @@ export function RunProgress({
         </div>
         <strong>Carregando o modelo na GPU…</strong>
         <p className="run-progress__hint">
-          Na primeira execução, o carregamento e a quantização podem levar
-          alguns minutos.
+          O carregamento e a preparação do modelo podem levar alguns minutos.
         </p>
         <div
           className="progress-track progress-track--indeterminate"
@@ -35,14 +30,12 @@ export function RunProgress({
     )
   }
 
+  if (!run) return null
+
   const findings =
     run.validation_attempts?.flatMap((attempt) =>
       attempt.findings.filter((finding) => finding.severity === 'error'),
     ) ?? []
-  const repairedOutput = run.validation_attempts?.some(
-    (attempt) => attempt.attempt === 'repaired' && attempt.parse_succeeded,
-  )
-
   const fieldName = (path: string) =>
     path === '/' ? 'Resposta completa' : path.replace(/^\//, '')
 
@@ -56,22 +49,14 @@ export function RunProgress({
       <div className="progress-track">
         <span style={{ width: `${run.progress_percent ?? 12}%` }} />
       </div>
-      {repairedOutput && run.status !== 'invalid_output' && (
-        <p className="run-progress__hint">
-          Um reparo seguro de formato foi aplicado à resposta do modelo.
-        </p>
-      )}
       {run.status === 'invalid_output' && (
         <div className="invalid-output" role="alert">
           <strong>
-            {hasClarificationQuestions
-              ? 'O modelo precisa de mais contexto para concluir a análise.'
-              : 'A saída do modelo não confere com o formato ADR esperado.'}
+            A saída do modelo não confere com o formato ADR esperado.
           </strong>
           <p>
-            {hasClarificationQuestions
-              ? 'Responda às questões abaixo. Suas respostas criarão uma nova revisão e o modelo continuará a análise.'
-              : 'O modelo não retornou um ADR em JSON válido. Revise a resposta recebida abaixo para entender o formato gerado.'}
+            O modelo não retornou um ADR em JSON válido. Revise a resposta
+            recebida abaixo para entender o formato gerado.
           </p>
           {findings.length > 0 && (
             <details>

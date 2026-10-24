@@ -19,7 +19,7 @@ describe('TrainingDashboard', () => {
       .click(screen.getByRole('radio', { name: /treino completo/i }))
 
     expect(
-      screen.getAllByText('configs/training/qwen3-4b-adr-json.yaml', {
+      screen.getAllByText('configs/training/qwen3-4b-adr-contract-v3.yaml', {
         exact: false,
       }),
     ).not.toHaveLength(0)
@@ -29,7 +29,7 @@ describe('TrainingDashboard', () => {
     ).toBeInTheDocument()
     expect(
       screen.getByText(
-        'uv run adr-forge dataset build --manifest datasets/manifests/v0.2.0-adr-json.json --output data/datasets/v0.2.0-adr-json/training.jsonl',
+        'uv run adr-forge dataset build --manifest datasets/manifests/v0.3.0-adr-contract.json --output data/datasets/v0.3.0-adr-contract/training.jsonl',
       ),
     ).toBeInTheDocument()
   })

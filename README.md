@@ -303,17 +303,17 @@ Use `--help` para confirmar os arquivos de configuração disponíveis e as opç
 ```bash
 uv sync --frozen --extra dev --extra ml
 uv run adr-forge dataset build \
-  --manifest datasets/manifests/v0.2.0-adr-json.json \
-  --output data/datasets/v0.2.0-adr-json/training.jsonl
-uv run adr-forge train sft --config configs/training/qwen3-4b-adr-json.yaml
+  --manifest datasets/manifests/v0.3.0-adr-contract.json \
+  --output data/datasets/v0.3.0-adr-contract/training.jsonl
+uv run adr-forge train sft --config configs/training/qwen3-4b-adr-contract-v3.yaml
 ```
 
 O treinamento requer o stack opcional de ML, modelo disponível e GPU compatível. O smoke test não é
 um dataset de qualidade para treinamento; ele existe apenas para validar o pipeline.
 
-O perfil `qwen3-4b-adr-json` treina o contrato de saída JSON do ADR e produz respostas
-provisórias quando faltam fatos e restrições. Decisões conclusivas de alta qualidade exigem
-exemplos ADR completos, revisados e com contexto estruturado.
+O perfil `qwen3-4b-adr-contract-v3` treina um único contrato JSON em `snake_case` para o ADR,
+incluindo perguntas provisórias em `unresolved_questions`. O validador permanece estrito: saídas
+fora do contrato são rejeitadas e devem ser corrigidas no dataset, não adaptadas na API.
 
 ### Banco e artefatos
 
