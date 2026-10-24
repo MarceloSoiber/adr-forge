@@ -43,7 +43,6 @@ from adr_forge.shared.errors import (
 )
 from adr_forge.shared.hashing import canonical_sha256
 from adr_forge.strategies.configuration import configured_registry
-from adr_forge.strategies.runtime import build_runtime
 from adr_forge.system.progress import CancellationToken
 
 
@@ -364,7 +363,17 @@ async def create_analysis_run(
     )
 
     now = datetime.now(UTC)
-    runtime = build_runtime(selected, settings)
+    continuation_run_id = (
+        str(revision.clarification_answers[-1].source_run_id)
+        if revision.clarification_answers
+        else None
+    )
+    runtime = request.app.state.runtime_sessions.activate(
+        str(run.id),
+        selected,
+        settings,
+        continuation_run_id=continuation_run_id,
+    )
     try:
         generated = await DecisionService().execute(runtime, revision, run.id, CancellationToken())
     except RuntimeError:

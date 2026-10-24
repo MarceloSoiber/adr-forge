@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import re
+import unicodedata
 from dataclasses import dataclass
 from uuid import UUID
 
@@ -22,7 +24,7 @@ class ParseResult:
 def parse_adr_output(
     raw_output: str, analysis_run_id: UUID, *, answered_questions: list[str] | None = None
 ) -> ParseResult:
-    """Parse a model response without altering its content or inventing fields."""
+    """Parse a model response while preserving its original captured content."""
     try:
         payload = json.loads(raw_output)
     except json.JSONDecodeError as error:
@@ -51,6 +53,9 @@ def parse_adr_output(
                 )
             ],
         )
+    normalization_findings = _normalize_model_equivalents(
+        payload, answered_questions=answered_questions or []
+    )
     payload["analysis_run_id"] = str(analysis_run_id)
     try:
         draft = ADRDraft.model_validate(payload)
@@ -68,8 +73,134 @@ def parse_adr_output(
                 for item in error.errors()
             ],
         )
-    findings = validate_adr_draft(draft, answered_questions=answered_questions)
+    findings = [
+        *normalization_findings,
+        *validate_adr_draft(draft, answered_questions=answered_questions),
+    ]
     return ParseResult(draft=draft, findings=findings, parse_succeeded=True)
+
+
+def _normalize_model_equivalents(
+    payload: dict[str, object], *, answered_questions: list[str]
+) -> list[ValidationFinding]:
+    """Canonicalize a few unambiguous model representations at the parsing boundary."""
+    findings: list[ValidationFinding] = []
+    risks = payload.get("risks")
+    if isinstance(risks, list):
+        for index, risk in enumerate(risks):
+            if not isinstance(risk, dict):
+                continue
+            for field in ("likelihood", "impact"):
+                value = risk.get(field)
+                if (
+                    isinstance(value, (int, float))
+                    and not isinstance(value, bool)
+                    and 0 <= value <= 1
+                ):
+                    probability = float(value)
+                    risk[field] = (
+                        "low"
+                        if probability < 1 / 3
+                        else "medium"
+                        if probability < 2 / 3
+                        else "high"
+                    )
+                    findings.append(
+                        _normalized_finding(
+                            f"/risks/{index}/{field}",
+                            f"Numeric {field} was converted to the ADR risk scale.",
+                        )
+                    )
+
+    operator_aliases = {">": "gt", ">=": "gte", "<": "lt", "<=": "lte", "=": "eq", "==": "eq"}
+    triggers = payload.get("review_triggers")
+    if isinstance(triggers, list):
+        for index, trigger in enumerate(triggers):
+            if not isinstance(trigger, dict):
+                continue
+            operator = trigger.get("operator")
+            if isinstance(operator, str) and operator in operator_aliases:
+                trigger["operator"] = operator_aliases[operator]
+                findings.append(
+                    _normalized_finding(
+                        f"/review_triggers/{index}/operator",
+                        "Symbolic operator was converted to the ADR operator name.",
+                    )
+                )
+
+    rationale = payload.get("rationale")
+    if isinstance(rationale, list):
+        for index, link in enumerate(rationale):
+            if not isinstance(link, dict) or link.get("evidence_kind") != "fact":
+                continue
+            evidence_id = link.get("evidence_id")
+            if isinstance(evidence_id, int) and not isinstance(evidence_id, bool):
+                evidence_id = str(evidence_id)
+            if isinstance(evidence_id, str) and evidence_id.isdigit():
+                link["evidence_id"] = f"fact:{evidence_id}"
+                findings.append(
+                    _normalized_finding(
+                        f"/rationale/{index}/evidence_id",
+                        "Numeric fact ID was converted to the canonical fact reference.",
+                    )
+                )
+
+    questions = payload.get("unresolved_questions", [])
+    if payload.get("status") == "provisional" and isinstance(questions, list):
+        answered = {_normalized_text(question) for question in answered_questions}
+        remaining_questions: list[object] = []
+        for index, question in enumerate(questions):
+            text = question.get("question") if isinstance(question, dict) else None
+            if isinstance(text, str) and _normalized_text(text) in answered:
+                findings.append(
+                    _normalized_finding(
+                        f"/unresolved_questions/{index}",
+                        "Question already answered by the user was removed.",
+                    )
+                )
+            else:
+                remaining_questions.append(question)
+
+        if not remaining_questions:
+            assumptions = payload.get("assumptions")
+            if isinstance(assumptions, list):
+                for index, assumption in enumerate(assumptions[:3]):
+                    if not isinstance(assumption, dict):
+                        continue
+                    statement = assumption.get("statement")
+                    impact = assumption.get("impact")
+                    if not isinstance(statement, str) or not statement.strip():
+                        continue
+                    if not isinstance(impact, str) or not impact.strip():
+                        continue
+                    assumption_id = str(assumption.get("id") or index)
+                    remaining_questions.append(
+                        {
+                            "id": f"confirm-assumption-{assumption_id}",
+                            "question": f"A premissa a seguir está correta? {statement}",
+                            "impact": impact,
+                        }
+                    )
+                    findings.append(
+                        _normalized_finding(
+                            f"/unresolved_questions/{len(remaining_questions) - 1}",
+                            "Provisional assumption was converted to a confirmation question.",
+                        )
+                    )
+        payload["unresolved_questions"] = remaining_questions
+    return findings
+
+
+def _normalized_finding(path: str, message: str) -> ValidationFinding:
+    return ValidationFinding(
+        code="output.normalized", path=path, severity="warning", message=message
+    )
+
+
+def _normalized_text(value: str) -> str:
+    decomposed = unicodedata.normalize("NFKD", value.casefold())
+    without_accents = "".join(char for char in decomposed if not unicodedata.combining(char))
+    return re.sub(r"[^a-z0-9]+", "", without_accents)
 
 
 def _json_pointer(location: object) -> str:

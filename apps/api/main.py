@@ -23,6 +23,7 @@ from adr_forge.experiments.run_repository import RunRepository
 from adr_forge.persistence.database import create_database_engine, create_session_factory
 from adr_forge.shared.config import Settings
 from adr_forge.strategies.executor import AnalysisExecutor
+from adr_forge.strategies.runtime import RuntimeSessionManager
 from adr_forge.system.resources import HostResourceProbe
 
 
@@ -78,6 +79,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             yield
         finally:
             await executor.stop()
+            application.state.runtime_sessions.close()
             await application.state.database_engine.dispose()
 
     application = FastAPI(title="ADR Forge Local API", version="0.1.0", lifespan=lifespan)
@@ -85,6 +87,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     application.state.database_engine = create_database_engine(resolved.database_url)
     application.state.session_factory = create_session_factory(application.state.database_engine)
     application.state.resources = HostResourceProbe()
+    application.state.runtime_sessions = RuntimeSessionManager()
     application.add_middleware(
         CORSMiddleware,
         allow_origins=[f"http://{resolved.web_host}:{resolved.web_port}"],

@@ -202,6 +202,20 @@ def test_load_sft_config_resolves_the_pinned_model_descriptor(tmp_path: Path) ->
     assert resolved.dataset_path == (tmp_path / "data.jsonl").resolve()
 
 
+def test_v040_training_config_pins_the_built_dataset_hashes() -> None:
+    from adr_forge.training.sft import load_sft_config
+
+    config = load_sft_config(Path("configs/training/qwen3-4b-adr-dialogue-v4.yaml"))
+
+    assert config.max_seq_length == 2048
+    assert config.dataset_build_sha256 == (
+        "f30b333ac835633f7ab6cacc679d393c82c8484e2b7bc377c430a73a8facfc81"
+    )
+    assert config.dataset_manifest_sha256 == (
+        "ac4fddf0fc371c7123a6f8be92e75fdb338a6a16231e783c663136bb88f6ab6f"
+    )
+
+
 def test_sft_failure_cleans_temporary_adapter_and_never_publishes_manifest(tmp_path: Path) -> None:
     from adr_forge.training.sft import SFTExecutionError, run_sft
 

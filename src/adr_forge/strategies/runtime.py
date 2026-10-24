@@ -10,6 +10,38 @@ from adr_forge.strategies.openai_compatible import OpenAICompatibleStrategy
 from adr_forge.strategies.qwen_runtime import QwenRuntime
 
 
+class RuntimeSessionManager:
+    """Keep one runtime alive across clarification runs in the local application."""
+
+    def __init__(self) -> None:
+        self._active_run_id: str | None = None
+        self._runtime: StructuredOutputStrategy | None = None
+
+    def activate(
+        self,
+        run_id: str,
+        strategy: AnalysisStrategy,
+        settings: Settings,
+        *,
+        continuation_run_id: str | None = None,
+    ) -> StructuredOutputStrategy:
+        if continuation_run_id == self._active_run_id and self._runtime is not None:
+            self._active_run_id = run_id
+            return self._runtime
+        self.close()
+        self._runtime = build_runtime(strategy, settings)
+        self._active_run_id = run_id
+        return self._runtime
+
+    def close(self) -> None:
+        runtime = self._runtime
+        self._runtime = None
+        self._active_run_id = None
+        close = getattr(runtime, "close", None)
+        if callable(close):
+            close()
+
+
 def build_runtime(strategy: AnalysisStrategy, settings: Settings) -> StructuredOutputStrategy:
     """Create the runtime selected by a validated, available strategy record."""
     if strategy.runtime_kind is RuntimeKind.FAKE:

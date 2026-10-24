@@ -308,6 +308,18 @@ uv run adr-forge dataset build \
 uv run adr-forge train sft --config configs/training/qwen3-4b-adr-contract-v3.yaml
 ```
 
+O dataset recomendado para treinamento conversacional é a versão `v0.4.0`, que inclui ADRs
+propostos, ADRs provisórios e continuidades de esclarecimento validadas pelo contrato de domínio:
+
+```bash
+uv run adr-forge dataset validate \
+  --manifest datasets/manifests/v0.4.0-adr-dialogue.json
+uv run adr-forge dataset build \
+  --manifest datasets/manifests/v0.4.0-adr-dialogue.json \
+  --output data/datasets/v0.4.0-adr-dialogue/training.jsonl
+uv run adr-forge train sft --config configs/training/qwen3-4b-adr-dialogue-v4.yaml
+```
+
 O treinamento requer o stack opcional de ML, modelo disponível e GPU compatível. O smoke test não é
 um dataset de qualidade para treinamento; ele existe apenas para validar o pipeline.
 

@@ -4,11 +4,31 @@ export function RunProgress({
   run,
   rawOutput,
   isStarting = false,
+  isContinuing = false,
 }: {
   run: AnalysisRun | null
   rawOutput: string | null
   isStarting?: boolean
+  isContinuing?: boolean
 }) {
+  if (isContinuing) {
+    return (
+      <section className="run-progress" aria-live="polite">
+        <div>
+          <span className="pulse-dot" />
+          <p>Continuando análise</p>
+        </div>
+        <strong>Reutilizando o modelo já carregado…</strong>
+        <div
+          className="progress-track progress-track--indeterminate"
+          aria-hidden="true"
+        >
+          <span />
+        </div>
+      </section>
+    )
+  }
+
   if (isStarting) {
     return (
       <section className="run-progress" aria-live="polite">
@@ -32,10 +52,19 @@ export function RunProgress({
 
   if (!run) return null
 
-  const findings =
-    run.validation_attempts?.flatMap((attempt) =>
-      attempt.findings.filter((finding) => finding.severity === 'error'),
-    ) ?? []
+  const attempts =
+    run.validation_attempts
+      ?.map((attempt) => ({
+        ...attempt,
+        findings: attempt.findings.filter(
+          (finding) => finding.severity === 'error',
+        ),
+      }))
+      .filter((attempt) => attempt.findings.length > 0) ?? []
+  const findingCount = attempts.reduce(
+    (count, attempt) => count + attempt.findings.length,
+    0,
+  )
   const fieldName = (path: string) =>
     path === '/' ? 'Resposta completa' : path.replace(/^\//, '')
 
@@ -58,19 +87,28 @@ export function RunProgress({
             O modelo retornou uma resposta que não atende ao esquema ADR. Revise
             os campos indicados e a resposta recebida abaixo.
           </p>
-          {findings.length > 0 && (
+          {findingCount > 0 && (
             <details>
               <summary>
-                Ver o que precisa ser corrigido ({findings.length})
+                Ver o que precisa ser corrigido ({findingCount})
               </summary>
-              <ul className="validation-findings">
-                {findings.map((finding, index) => (
-                  <li key={`${finding.path}-${index}`}>
-                    <code>Campo: {fieldName(finding.path)}</code>
-                    <span>{finding.message}</span>
-                  </li>
-                ))}
-              </ul>
+              {attempts.map((attempt) => (
+                <div key={attempt.attempt}>
+                  <strong>
+                    {attempt.attempt === 'original'
+                      ? 'Saída original'
+                      : 'Reparo automático'}
+                  </strong>
+                  <ul className="validation-findings">
+                    {attempt.findings.map((finding, index) => (
+                      <li key={`${finding.path}-${index}`}>
+                        <code>Campo: {fieldName(finding.path)}</code>
+                        <span>{finding.message}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
             </details>
           )}
           {rawOutput && (

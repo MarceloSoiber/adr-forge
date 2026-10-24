@@ -38,6 +38,7 @@ export function AnalysisFlow() {
   const [showClarification, setShowClarification] = useState(true)
   const [error, setError] = useState<ProblemDetail | null>(null)
   const [isStarting, setIsStarting] = useState(false)
+  const [isContinuing, setIsContinuing] = useState(false)
   const eventSource = useRef<EventSource | null>(null)
 
   useEffect(() => {
@@ -156,7 +157,7 @@ export function AnalysisFlow() {
     answers: Array<{ question_id: string; answer: string }>,
   ) {
     if (!scenario || !run || !strategy) return
-    setIsStarting(true)
+    setIsContinuing(true)
     try {
       let revision
       try {
@@ -188,7 +189,7 @@ export function AnalysisFlow() {
       setShowClarification(true)
       subscribe(next.id)
     } finally {
-      setIsStarting(false)
+      setIsContinuing(false)
     }
   }
 
@@ -219,10 +220,12 @@ export function AnalysisFlow() {
         run={run}
         rawOutput={rawOutput}
         isStarting={isStarting}
+        isContinuing={isContinuing}
       />
       <AdrView adr={adr} onExport={() => void exportMarkdown()} />
       {showClarification &&
         !isStarting &&
+        !isContinuing &&
         scenario &&
         run &&
         run.status === 'needs_clarification' &&

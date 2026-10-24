@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import asyncio
-from dataclasses import dataclass
+import gc
+from dataclasses import dataclass, field
 from pathlib import Path
 from time import perf_counter
 from typing import Any
@@ -23,14 +24,16 @@ from adr_forge.system.progress import CancellationToken
 QWEN_MODEL_ID = "Qwen/Qwen3-4B-Instruct-2507"
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(slots=True)
 class QwenRuntime(StructuredOutputStrategy):
     revision: str
     max_new_tokens: int = 1024
     adapter_path: Path | None = None
+    _tokenizer: Any | None = field(default=None, init=False, repr=False)
+    _model: Any | None = field(default=None, init=False, repr=False)
 
     def __post_init__(self) -> None:
-        object.__setattr__(self, "revision", require_immutable_model_revision(self.revision))
+        self.revision = require_immutable_model_revision(self.revision)
 
     async def generate(
         self, scenario: ScenarioRevision, *, cancellation: CancellationToken
@@ -65,29 +68,33 @@ class QwenRuntime(StructuredOutputStrategy):
             )
         except ImportError as error:
             raise RuntimeError("Qwen runtime requires the optional 'ml' dependencies.") from error
-        tokenizer = AutoTokenizer.from_pretrained(
-            QWEN_MODEL_ID, revision=self.revision, trust_remote_code=False
-        )
-        quantization = BitsAndBytesConfig(
-            load_in_4bit=True,
-            bnb_4bit_quant_type="nf4",
-            bnb_4bit_use_double_quant=True,
-        )
-        model: Any = AutoModelForCausalLM.from_pretrained(
-            QWEN_MODEL_ID,
-            revision=self.revision,
-            trust_remote_code=False,
-            device_map="auto",
-            quantization_config=quantization,
-        )
-        if self.adapter_path is not None:
-            try:
-                from peft import PeftModel
-            except ImportError as error:
-                raise RuntimeError(
-                    "Qwen adapter runtime requires the optional 'ml' dependencies."
-                ) from error
-            model = PeftModel.from_pretrained(model, str(self.adapter_path))
+        if self._tokenizer is None or self._model is None:
+            self._tokenizer = AutoTokenizer.from_pretrained(
+                QWEN_MODEL_ID, revision=self.revision, trust_remote_code=False
+            )
+            quantization = BitsAndBytesConfig(
+                load_in_4bit=True,
+                bnb_4bit_quant_type="nf4",
+                bnb_4bit_use_double_quant=True,
+            )
+            model: Any = AutoModelForCausalLM.from_pretrained(
+                QWEN_MODEL_ID,
+                revision=self.revision,
+                trust_remote_code=False,
+                device_map="auto",
+                quantization_config=quantization,
+            )
+            if self.adapter_path is not None:
+                try:
+                    from peft import PeftModel
+                except ImportError as error:
+                    raise RuntimeError(
+                        "Qwen adapter runtime requires the optional 'ml' dependencies."
+                    ) from error
+                model = PeftModel.from_pretrained(model, str(self.adapter_path))
+            self._model = model
+        tokenizer = self._tokenizer
+        model = self._model
         tokenized = tokenizer(render_assistant_prompt(tokenizer, prompt), return_tensors="pt")
         encoded = {name: value.to(model.device) for name, value in tokenized.items()}
         input_ids = encoded["input_ids"]
@@ -113,3 +120,16 @@ class QwenRuntime(StructuredOutputStrategy):
                 latency_ms=int((perf_counter() - started) * 1000),
             ),
         )
+
+    def close(self) -> None:
+        """Release loaded model resources when a new analysis session starts."""
+        self._model = None
+        self._tokenizer = None
+        gc.collect()
+        try:
+            import torch
+
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+        except ImportError:
+            pass
