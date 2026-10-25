@@ -2,30 +2,72 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import APIRouter, Request
+from pydantic import BaseModel, Field
 
 from adr_forge.shared.errors import PreconditionFailedError
 
-router = APIRouter(tags=["system"])
+
+class HealthResponse(BaseModel):
+    status: Literal["ok"]
 
 
-def _resources(request: Request) -> dict[str, Any]:
+class ReadinessResponse(BaseModel):
+    ready: bool
+    checks: dict[str, bool]
+
+
+class SystemResources(BaseModel):
+    """Sanitized capacity data for local diagnostics."""
+
+    disk: dict[str, Any]
+    memory: dict[str, Any]
+    gpu: dict[str, Any]
+    artifact_budget: dict[str, Any]
+    blockers: list[str] = Field(default_factory=list)
+
+
+class IntegrationStatus(BaseModel):
+    name: str
+    available: bool
+    reason: str | None = None
+    latency_ms: int | None = Field(default=None, ge=0)
+
+
+_PROBLEM_RESPONSE = {
+    "description": "The local storage precondition is not satisfied.",
+    "content": {"application/problem+json": {"schema": {"$ref": "#/components/schemas/Problem"}}},
+}
+
+
+router = APIRouter(prefix="/api/v1", tags=["system"])
+
+
+def _resources(request: Request) -> SystemResources:
     settings = request.app.state.settings
     snapshot = request.app.state.resources.snapshot(settings.artifact_root)
-    return {
-        "disk": {
+    blockers: list[str] = []
+    if not snapshot.disk.available:
+        blockers.append("disk_unavailable")
+    elif snapshot.disk.free_bytes is None or (
+        snapshot.disk.free_bytes < settings.artifact_free_disk_reserve_bytes
+    ):
+        blockers.append("insufficient_disk_capacity")
+
+    return SystemResources(
+        disk={
             "total_bytes": snapshot.disk.total_bytes,
             "free_bytes": snapshot.disk.free_bytes,
             "available": snapshot.disk.available,
         },
-        "memory": {
+        memory={
             "total_bytes": snapshot.memory.total_bytes,
             "available_bytes": snapshot.memory.available_bytes,
             "available": snapshot.memory.available,
         },
-        "gpu": {
+        gpu={
             "available": snapshot.gpu.available,
             "total_vram_bytes": snapshot.gpu.total_vram_bytes,
             "free_vram_bytes": snapshot.gpu.free_vram_bytes,
@@ -38,16 +80,26 @@ def _resources(request: Request) -> dict[str, Any]:
                 for process in snapshot.gpu.processes
             ],
         },
-    }
+        artifact_budget={
+            "reserve_bytes": settings.artifact_free_disk_reserve_bytes,
+            "free_bytes": snapshot.disk.free_bytes,
+        },
+        blockers=blockers,
+    )
 
 
-@router.get("/health")
-async def health() -> dict[str, str]:
-    return {"status": "ok"}
+@router.get("/health", operation_id="getHealth", response_model=HealthResponse)
+async def health() -> HealthResponse:
+    return HealthResponse(status="ok")
 
 
-@router.get("/readiness")
-async def readiness(request: Request) -> dict[str, str]:
+@router.get(
+    "/readiness",
+    operation_id="getReadiness",
+    response_model=ReadinessResponse,
+    responses={503: _PROBLEM_RESPONSE},
+)
+async def readiness(request: Request) -> ReadinessResponse:
     settings = request.app.state.settings
     try:
         settings.artifact_root.mkdir(parents=True, exist_ok=True)
@@ -60,15 +112,30 @@ async def readiness(request: Request) -> dict[str, str]:
             raise OSError("free disk reserve is unavailable")
     except OSError as exc:
         raise PreconditionFailedError("local storage is not ready") from exc
-    return {"status": "ready"}
+    return ReadinessResponse(
+        ready=True,
+        checks={"artifact_root": True, "disk_capacity": True, "disk_reserve": True},
+    )
 
 
-@router.get("/system/resources")
-async def system_resources(request: Request) -> dict[str, Any]:
+@router.get(
+    "/system/resources",
+    operation_id="getSystemResources",
+    response_model=SystemResources,
+)
+async def system_resources(request: Request) -> SystemResources:
     return _resources(request)
 
 
-@router.get("/integrations/knowledge-hub")
-async def knowledge_hub_status(request: Request) -> dict[str, str]:
+@router.get(
+    "/integrations/knowledge-hub",
+    operation_id="getKnowledgeHubStatus",
+    response_model=IntegrationStatus,
+)
+async def knowledge_hub_status(request: Request) -> IntegrationStatus:
     configured = bool(request.app.state.settings.knowledge_hub_token)
-    return {"name": "knowledge_hub", "status": "configured" if configured else "not_configured"}
+    return IntegrationStatus(
+        name="knowledge_hub",
+        available=configured,
+        reason=None if configured else "not_configured",
+    )

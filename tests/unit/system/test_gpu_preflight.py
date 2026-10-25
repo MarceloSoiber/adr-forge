@@ -36,13 +36,22 @@ def test_preflight_reports_insufficient_vram_without_secret_output() -> None:
 
 
 def test_preflight_reports_external_lm_studio_process() -> None:
-    gpu = GpuCapacity(True, 12_000, 10_000, (GpuProcess(42, "LM Studio", 2_000),))
+    gpu = GpuCapacity(True, 12_000, 10_000, (GpuProcess(42, "LM Studio", 2 * 1024**3),))
 
     result = GpuPreflight(FakeGpuProbe(gpu), 500).check()
 
     assert result.ready is False
     assert result.blockers == ("external_gpu_processes",)
     assert result.gpu.processes[0].name == "LM Studio"
+
+
+def test_preflight_allows_small_desktop_cuda_allocations() -> None:
+    gpu = GpuCapacity(True, 12_000, 10_000, (GpuProcess(42, "gnome-shell", 400 * 1024**2),))
+
+    result = GpuPreflight(FakeGpuProbe(gpu), 500).check()
+
+    assert result.ready is True
+    assert result.blockers == ()
 
 
 def test_gpu_lease_excludes_another_local_process(tmp_path: Path) -> None:

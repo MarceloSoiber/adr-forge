@@ -27,8 +27,14 @@ export function AdrView({
   if (!adr) return null
 
   return (
-    <article>
-      <h1>{String(adr.title)}</h1>
+    <article className="adr-result">
+      <div className="result-heading">
+        <div>
+          <p className="section-kicker">Resultado da inferência</p>
+          <h2>{String(adr.title)}</h2>
+        </div>
+        <span className="status-chip">{adr.status ?? 'gerado'}</span>
+      </div>
       <AdrSection heading="Contexto" value={adr.context} />
       <AdrSection heading="Fatos" value={adr.facts} />
       <AdrSection heading="Restrições" value={adr.constraints} />
@@ -53,7 +59,9 @@ export function AdrView({
       <p>
         A decisão final deve ser revisada e aprovada por uma pessoa responsável.
       </p>
-      <button onClick={onExport}>Exportar Markdown</button>
+      <button className="secondary-button" onClick={onExport}>
+        Exportar Markdown
+      </button>
     </article>
   )
 }

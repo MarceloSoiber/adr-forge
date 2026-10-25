@@ -9,13 +9,13 @@ services:
     # socket below remains loopback-only.
     command: ["uvicorn", "apps.api.main:app", "--host", "0.0.0.0", "--port", "8000"]
     environment:
-      ADR_FORGE_DATABASE_URL: sqlite+aiosqlite:////app/var/adr-forge.db
-      ADR_FORGE_ARTIFACT_ROOT: /app/var/artifacts
+      ADR_FORGE_DATABASE_URL: sqlite+aiosqlite:////app/data/adr-forge.db
+      ADR_FORGE_ARTIFACT_ROOT: /app/data/artifacts
       CUDA_VISIBLE_DEVICES: ""
     ports:
       - "127.0.0.1:8000:8000"
     volumes:
-      - adr-forge-var:/app/var
+      - ./data:/app/data
     restart: unless-stopped
 
   web:
@@ -27,6 +27,3 @@ services:
     ports:
       - "127.0.0.1:5173:80"
     restart: unless-stopped
-
-volumes:
-  adr-forge-var:

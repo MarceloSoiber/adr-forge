@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import math
+import re
+import unicodedata
 from dataclasses import dataclass
 from typing import Literal
 
@@ -22,7 +24,9 @@ def _error(code: str, path: str, message: str) -> ValidationFinding:
     return ValidationFinding(code=code, path=path, severity="error", message=message)
 
 
-def validate_adr_draft(draft: ADRDraft) -> list[ValidationFinding]:
+def validate_adr_draft(
+    draft: ADRDraft, *, answered_questions: list[str] | None = None
+) -> list[ValidationFinding]:
     """Return stable findings without changing the supplied immutable draft."""
     findings: list[ValidationFinding] = []
     viable_alternatives = sum(alternative.viable for alternative in draft.alternatives)
@@ -112,6 +116,16 @@ def validate_adr_draft(draft: ADRDraft) -> list[ValidationFinding]:
                     "A provisional ADR requires one to three unresolved questions.",
                 )
             )
+        resolved = {_normalized_question(question) for question in answered_questions or []}
+        for index, question in enumerate(draft.unresolved_questions):
+            if _normalized_question(question.question) in resolved:
+                findings.append(
+                    _error(
+                        "unresolved_questions.already_answered",
+                        f"/unresolved_questions/{index}/question",
+                        "A clarification question must not repeat a question already answered.",
+                    )
+                )
 
     for index, alternative in enumerate(draft.alternatives):
         if not alternative.viable and not alternative.rejection_reason:
@@ -142,6 +156,9 @@ def validate_adr_draft(draft: ADRDraft) -> list[ValidationFinding]:
                 link.evidence_kind == EvidenceKind.ASSUMPTION and link.evidence_id in assumption_ids
             )
             or (
+                link.evidence_kind == EvidenceKind.CONSTRAINT and link.evidence_id in constraint_ids
+            )
+            or (
                 link.evidence_kind == EvidenceKind.REFERENCE
                 and link.evidence_id in draft.reference_ids
             )
@@ -164,6 +181,12 @@ def validate_adr_draft(draft: ADRDraft) -> list[ValidationFinding]:
                 )
             )
     return findings
+
+
+def _normalized_question(value: str) -> str:
+    decomposed = unicodedata.normalize("NFKD", value.casefold())
+    without_accents = "".join(char for char in decomposed if not unicodedata.combining(char))
+    return re.sub(r"[^a-z0-9]+", "", without_accents)
 
 
 def classify_context(scenario: ScenarioRevision) -> list[ValidationFinding]:

@@ -1,0 +1,7 @@
+{"id":"context-empty","mutation":"context_empty","expected":"invalid","expected_path":"/context"}
+{"id":"assumption-confidence-label","mutation":"assumption_confidence_label","expected":"normalized","expected_path":"/assumptions/0/confidence"}
+{"id":"question-extra-confidence","mutation":"question_extra_confidence","expected":"invalid","expected_path":"/unresolved_questions/0/confidence"}
+{"id":"extra-alternative-ids","mutation":"extra_alternative_ids","expected":"invalid","expected_path":"/alternative_ids"}
+{"id":"numeric-risk-scale","mutation":"numeric_risk","expected":"normalized","expected_path":"/risks/0/likelihood"}
+{"id":"symbolic-review-operator","mutation":"symbolic_operator","expected":"normalized","expected_path":"/review_triggers/0/operator"}
+{"id":"answered-question-repeated","mutation":"answered_question","expected":"normalized","expected_path":"/unresolved_questions/0"}

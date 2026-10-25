@@ -254,17 +254,21 @@ primary output path.
 
 **Purpose**: Harden all stories, demonstrate recovery, and prepare honest portfolio evidence.
 
-- [ ] T117 [P] Implement consistent SQLite backup plus schema revision, size, and SHA-256 manifest in `src/adr_forge/cli/database.py`
-- [ ] T118 [P] Implement `adr-forge artifacts list|prune --confirm` and audit records for reclaimed bytes in `src/adr_forge/cli/artifacts.py`
-- [ ] T119 [P] Add secret redaction, loopback rejection, artifact traversal, prompt-injection isolation, request/context limits, and unsafe model configuration tests in `tests/security/`
-- [ ] T120 Add API compatibility validation against `specs/001-architecture-decision-lab/contracts/api.openapi.yaml` to `.github/workflows/ci.yml`
-- [ ] T121 [P] Add a CPU-only GitLab test pipeline using fakes and snapshots, with no deployment or production Docker operations, in `.gitlab-ci.yml`
-- [ ] T122 Add local performance instrumentation and a 100-scenario fake benchmark for progress, SQLite, report, and artifact overhead in `tests/performance/test_local_benchmark.py`
-- [ ] T123 Execute backup/restore, API restart-to-interrupted, SSE reconnect, and safe-prune recovery tests in `tests/integration/test_recovery.py`
-- [ ] T124 Run every CPU-safe command in `specs/001-architecture-decision-lab/quickstart.md` and correct documentation or code discrepancies in that file
-- [ ] T125 Run the opt-in local Qwen baseline and QLoRA smoke gates, record hardware/config/results without committing private artifacts in `docs/experiments/0001-local-smoke.md`
-- [ ] T126 Run the first fixed benchmark, preserve all failures/exclusions, and publish an honest reproducibility report in `docs/experiments/0002-baseline-vs-finetuned.md`
-- [ ] T127 Expand `README.md` with architecture diagram, setup, safety boundary, dataset methodology, measured results, limitations, and links to the accepted ADRs and experiment reports
+**Entry gate**: Reconcile and complete the selected release stories before hardening. In particular,
+T040–T049 remain open and block API compatibility/recovery, SSE reconnect, real baseline smoke, and
+the fixed benchmark. Phase 8 evidence MUST NOT bypass or relabel those prerequisites as complete.
+
+- [X] T117 [P] Implement non-overwriting SQLite online backup, copy integrity verification, and atomic canonical schema-revision/size/SHA-256 manifest publication in `src/adr_forge/persistence/backup.py` and `src/adr_forge/cli/database.py`
+- [X] T118 [P] Implement deterministic `adr-forge artifacts list`, reference-safe `prune --confirm`, honest partial-failure/reclaimed-byte accounting, and append-only prune audit persistence in `src/adr_forge/artifacts/service.py`, `src/adr_forge/artifacts/repository.py`, `src/adr_forge/cli/artifacts.py`, and a new serialized Alembic migration
+- [X] T119 [P] Add secret redaction, loopback rejection, artifact traversal, prompt-injection isolation, request/context limits, and unsafe model configuration tests in `tests/security/`
+- [X] T120 Add offline normalized generated-versus-committed API compatibility validation against `specs/001-architecture-decision-lab/contracts/api.openapi.yaml` to contract tests and `.github/workflows/ci.yml`
+- [X] T121 [P] Add a CPU-only GitLab test pipeline using fakes and snapshots, with no deployment or production Docker operations, in `.gitlab-ci.yml`
+- [X] T122 Add environment-tagged local performance instrumentation and a fully accounted 100-scenario fake benchmark for progress, SQLite, report, and artifact overhead in `tests/performance/test_local_benchmark.py`
+- [X] T123 Execute manifest-verified isolated backup/restore, API restart-to-interrupted, persisted-state-before-SSE reconnect, and fault-injected safe-prune recovery tests using disposable roots in `tests/integration/test_recovery.py`
+- [X] T124 Run every CPU-safe command in `specs/001-architecture-decision-lab/quickstart.md` and correct documentation or code discrepancies in that file
+- [X] T125 Run the opt-in local Qwen baseline and QLoRA smoke gates, record hardware/config/results without committing private artifacts in `docs/experiments/0001-local-smoke.md`
+- [X] T126 Run the first fixed benchmark, preserve all failures/exclusions, and publish an honest reproducibility report in `docs/experiments/0002-baseline-vs-finetuned.md`
+- [X] T127 Expand `README.md` with architecture diagram, setup, safety boundary, dataset methodology, measured results, limitations, and links to the accepted ADRs and experiment reports
 
 ---
 

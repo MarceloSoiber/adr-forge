@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import AsyncIterator
+from datetime import UTC, datetime
 from pathlib import Path
 from uuid import uuid4
 
@@ -31,7 +32,55 @@ class _CompletedRuns:
         }
 
     async def get_adr(self, run_id: str):
-        return {"id": str(uuid4()), "analysis_run_id": run_id, "created_at": "now", "title": "ADR"}
+        return {
+            "id": str(uuid4()),
+            "analysis_run_id": run_id,
+            "schema_version": "adr-v1",
+            "title": "Persistência do catálogo",
+            "status": "proposed",
+            "context": ["O catálogo exige consistência."],
+            "facts": ["Há relações entre produtos e estoque."],
+            "assumptions": [],
+            "unresolved_questions": [],
+            "constraints": ["A solução deve permanecer local."],
+            "alternatives": [
+                {
+                    "id": "postgresql",
+                    "name": "PostgreSQL",
+                    "summary": "Banco relacional.",
+                    "viable": True,
+                    "benefits": ["Consistência."],
+                    "drawbacks": ["Operação."],
+                    "constraint_ids": ["constraint:0"],
+                },
+                {
+                    "id": "sqlite",
+                    "name": "SQLite",
+                    "summary": "Banco embarcado.",
+                    "viable": True,
+                    "benefits": ["Simplicidade."],
+                    "drawbacks": ["Concorrência limitada."],
+                    "constraint_ids": ["constraint:0"],
+                },
+            ],
+            "decision": "PostgreSQL",
+            "rationale": [
+                {
+                    "claim": "A decisão usa o fato disponível.",
+                    "evidence_kind": "fact",
+                    "evidence_id": "fact:0",
+                }
+            ],
+            "positive_consequences": ["Consistência explícita."],
+            "negative_consequences": ["Exige operação."],
+            "risks": [],
+            "review_triggers": [
+                {"metric": "latencia", "operator": "gt", "threshold": 500, "unit": "ms"}
+            ],
+            "confidence": 0.8,
+            "reference_ids": [],
+            "created_at": datetime.now(UTC),
+        }
 
 
 @pytest.fixture
@@ -52,6 +101,7 @@ async def client(
         Settings(
             database_url=f"sqlite+aiosqlite:///{database_path}",
             artifact_root=tmp_path / "artifacts",
+            model_revision="cdbee75f17c01a7cc42f958dc650907174af0554",
         )
     )
     transport = httpx.ASGITransport(app=application)

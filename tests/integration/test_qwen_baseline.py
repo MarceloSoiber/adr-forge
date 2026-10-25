@@ -66,7 +66,7 @@ async def test_qwen_baseline_generates_from_local_pinned_artifacts(
         categories=[DecisionCategory.SQL_VS_NOSQL],
     )
 
-    result = await QwenRuntime(revision=os.environ[_REVISION_ENV]).generate(
+    result = await QwenRuntime(revision=os.environ[_REVISION_ENV], max_new_tokens=64).generate(
         scenario, cancellation=CancellationToken()
     )
 

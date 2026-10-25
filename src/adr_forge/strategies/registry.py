@@ -7,6 +7,7 @@ from pathlib import Path
 from uuid import UUID
 
 from adr_forge.shared.hashing import canonical_sha256
+from adr_forge.shared.model_identity import require_immutable_model_revision
 from adr_forge.strategies.fine_tuned import AdapterVerificationError, verify_adapter_manifest
 from adr_forge.strategies.models import (
     AnalysisStrategy,
@@ -74,10 +75,11 @@ def _unavailable(code: str, reason: str) -> StrategyAvailability:
 
 
 def default_registry(
-    model_revision: str = "main",
+    model_revision: str | None = None,
     *,
+    lm_studio_base_url: object | None = None,
+    lm_studio_model_id: str | None = None,
     retrieval_configured: bool = False,
-    adapter_artifact_id: UUID | None = None,
     adapter_manifest_path: Path | None = None,
     adapter_runtime_available: bool = False,
     enabled: Iterable[str] | None = None,
@@ -88,6 +90,7 @@ def default_registry(
     calls Knowledge Hub or imports optional ML runtimes, so strategy discovery
     stays fast and deterministic.
     """
+    model_revision = require_immutable_model_revision(model_revision)
     generation_config_hash = canonical_sha256({"max_new_tokens": 1024, "temperature": 0})
     enabled_ids = set(enabled) if enabled is not None else None
 
@@ -103,10 +106,18 @@ def default_registry(
         )
     )
     adapter_availability = _adapter_availability(
-        adapter_artifact_id,
         adapter_manifest_path,
         model_revision,
         adapter_runtime_available,
+    )
+    lm_studio_available = lm_studio_base_url is not None and lm_studio_model_id is not None
+    lm_studio_availability = (
+        StrategyAvailability(available=True)
+        if lm_studio_available
+        else _unavailable(
+            "lm_studio_unconfigured",
+            "Configure ADR_FORGE_LM_STUDIO_BASE_URL e ADR_FORGE_LM_STUDIO_MODEL_ID.",
+        )
     )
     return StrategyRegistry(
         [
@@ -153,7 +164,9 @@ def default_registry(
                 kind=StrategyKind.FINE_TUNED,
                 model_id=QWEN_MODEL_ID,
                 model_revision=model_revision,
-                adapter_artifact_id=adapter_artifact_id,
+                adapter_path=(adapter_manifest_path.parent / "adapter")
+                if adapter_manifest_path is not None
+                else None,
                 prompt_version="adr-structured-v1",
                 generation_config_hash=generation_config_hash,
                 runtime_kind=RuntimeKind.TRANSFORMERS,
@@ -166,7 +179,9 @@ def default_registry(
                 kind=StrategyKind.FINE_TUNED_RAG,
                 model_id=QWEN_MODEL_ID,
                 model_revision=model_revision,
-                adapter_artifact_id=adapter_artifact_id,
+                adapter_path=(adapter_manifest_path.parent / "adapter")
+                if adapter_manifest_path is not None
+                else None,
                 prompt_version="adr-rag-v1",
                 generation_config_hash=generation_config_hash,
                 requires_retrieval=True,
@@ -178,30 +193,28 @@ def default_registry(
                 id="qwen3-4b-baseline",
                 version="1",
                 kind=StrategyKind.BASE,
-                model_id=QWEN_MODEL_ID,
+                # LM Studio reports the loaded GGUF identifier; the immutable HF
+                # revision remains the provenance reference for this baseline.
+                model_id=lm_studio_model_id or QWEN_MODEL_ID,
                 model_revision=model_revision,
                 prompt_version="adr-v1",
                 generation_config_hash=generation_config_hash,
-                runtime_kind=RuntimeKind.TRANSFORMERS,
+                runtime_kind=RuntimeKind.OPENAI_COMPATIBLE,
                 enabled=is_enabled("qwen3-4b-baseline"),
-                availability=_unavailable(
-                    "runtime_unavailable",
-                    "Dependências opcionais de ML e preflight de GPU são necessários.",
-                ),
+                availability=lm_studio_availability,
             ),
         ]
     )
 
 
 def _adapter_availability(
-    artifact_id: UUID | None,
     manifest_path: Path | None,
     model_revision: str,
     runtime_available: bool,
 ) -> StrategyAvailability:
-    if artifact_id is None or manifest_path is None:
+    if manifest_path is None:
         return _unavailable(
-            "adapter_artifact_missing", "Não há um artefato de adaptador configurado."
+            "adapter_manifest_missing", "Não há um manifesto de adaptador configurado."
         )
     try:
         verify_adapter_manifest(

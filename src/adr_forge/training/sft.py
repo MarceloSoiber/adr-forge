@@ -19,6 +19,7 @@ from typing import Any, Protocol, cast
 
 import yaml
 
+from adr_forge.shared.chat_prompt import render_assistant_prompt
 from adr_forge.shared.hashing import canonical_json
 
 
@@ -107,6 +108,12 @@ def format_completion_example(example: dict[str, object]) -> dict[str, object]:
         raise ValueError("training prompt and completion must not be empty")
     return {
         "text": f"{prompt}{completion}",
+        # Keep the two fields separately as well.  Current TRL releases use
+        # this shape to create the completion mask, while ``text`` and
+        # ``assistant_start`` remain useful, framework-neutral evidence of the
+        # intended boundary.
+        "prompt": prompt,
+        "completion": completion,
         "assistant_start": len(prompt),
         "loss_scope": "completion_only",
     }
@@ -276,6 +283,20 @@ def _atomic_json(path: Path, payload: dict[str, object]) -> None:
     temporary.replace(path)
 
 
+def _hardware_evidence() -> dict[str, object]:
+    """Capture CUDA evidence when optional ML training has used a GPU."""
+    try:
+        import torch
+    except ImportError:
+        return {"cuda_device": None, "peak_vram_bytes": 0}
+    if not torch.cuda.is_available():
+        return {"cuda_device": None, "peak_vram_bytes": 0}
+    return {
+        "cuda_device": torch.cuda.get_device_name(0),
+        "peak_vram_bytes": torch.cuda.max_memory_allocated(),
+    }
+
+
 def run_sft(
     config: SFTConfig,
     *,
@@ -309,6 +330,13 @@ def run_sft(
     started = time.monotonic()
     published = False
     try:
+        try:
+            import torch
+
+            if torch.cuda.is_available():
+                torch.cuda.reset_peak_memory_stats()
+        except ImportError:
+            pass
         trainer = (trainer_factory or create_trl_trainer)(config, examples)
         trainer.train(resume_from_checkpoint=checkpoint)
         _record_complete_checkpoints(config.output_dir, config_sha256)
@@ -319,6 +347,7 @@ def run_sft(
         aggregate = _hash_records(files)
         temporary_adapter.replace(final_adapter)
         published = True
+        hardware = _hardware_evidence()
         manifest: dict[str, object] = {
             "schema_version": "adapter-v1",
             "model": {"id": config.model_id, "revision": config.model_revision},
@@ -331,6 +360,8 @@ def run_sft(
             "effective_config_sha256": config_sha256,
             "code_revision": config.code_revision,
             "adapter": {"files": files, "sha256": aggregate},
+            "hardware": hardware,
+            "peak_vram_bytes": hardware["peak_vram_bytes"],
             "duration_seconds": time.monotonic() - started,
             "terminal_outcome": "completed",
         }
@@ -352,22 +383,20 @@ def create_trl_trainer(config: SFTConfig, examples: list[dict[str, object]]) -> 
     """Construct the production TRL/PEFT trainer lazily.
 
     This function is deliberately the only optional-ML import boundary.  TRL's
-    completion collator receives the assistant delimiter used by canonical
-    rows, ensuring prompt and padding labels are ignored.
+    trainer receives canonical prompt/completion rows, ensuring current TRL
+    releases build the completion-only loss mask without a deprecated custom
+    collator.
     """
     try:
         from datasets import Dataset  # type: ignore[attr-defined]
-        from peft import LoraConfig, TaskType  # type: ignore[import-not-found]
+        from peft import LoraConfig, TaskType
         from transformers import (
             AutoModelForCausalLM,
             AutoTokenizer,
             BitsAndBytesConfig,
-            TrainingArguments,
         )
-        from trl import (  # type: ignore[import-not-found]
-            DataCollatorForCompletionOnlyLM,
-            SFTTrainer,
-        )
+        from trl import SFTConfig as TRLSFTConfig
+        from trl import SFTTrainer
     except ImportError as exc:  # pragma: no cover - depends on the optional ml extra
         raise SFTExecutionError("install adr-forge[ml] to run QLoRA training") from exc
     tokenizer = AutoTokenizer.from_pretrained(
@@ -388,7 +417,7 @@ def create_trl_trainer(config: SFTConfig, examples: list[dict[str, object]]) -> 
         quantization_config=quantization,
         device_map="auto",
     )
-    arguments = TrainingArguments(
+    arguments = TRLSFTConfig(
         output_dir=str(config.output_dir),
         seed=config.seed,
         learning_rate=config.learning_rate,
@@ -399,14 +428,22 @@ def create_trl_trainer(config: SFTConfig, examples: list[dict[str, object]]) -> 
         save_steps=config.save_steps,
         save_strategy="steps",
         report_to=[],
+        max_length=config.max_seq_length,
+        completion_only_loss=True,
     )
     trainer = SFTTrainer(
         model=model,
         args=arguments,
-        train_dataset=Dataset.from_list(examples),
+        train_dataset=Dataset.from_list(
+            [
+                {
+                    "prompt": render_assistant_prompt(tokenizer, str(example["prompt"])),
+                    "completion": example["completion"],
+                }
+                for example in examples
+            ]
+        ),
         processing_class=tokenizer,
-        max_seq_length=config.max_seq_length,
-        dataset_text_field="text",
         peft_config=LoraConfig(
             task_type=TaskType.CAUSAL_LM,
             r=config.lora_rank,
@@ -414,7 +451,6 @@ def create_trl_trainer(config: SFTConfig, examples: list[dict[str, object]]) -> 
             lora_dropout=config.lora_dropout,
             bias="none",
         ),
-        data_collator=DataCollatorForCompletionOnlyLM("Assistente:", tokenizer=tokenizer),
     )
     return _TRLTrainer(trainer)
 

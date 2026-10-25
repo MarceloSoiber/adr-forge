@@ -2,11 +2,10 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
 from dataclasses import dataclass
 from uuid import UUID
 
-from adr_forge.decisions.parsing import ParsedOutputs, parse_with_one_repair
+from adr_forge.decisions.parsing import ParseResult, parse_adr_output
 from adr_forge.scenarios.models import ScenarioRevision
 from adr_forge.strategies.base import GenerationResult, StructuredOutputStrategy
 from adr_forge.system.progress import CancellationToken
@@ -15,11 +14,11 @@ from adr_forge.system.progress import CancellationToken
 @dataclass(frozen=True, slots=True)
 class GeneratedDecision:
     generation: GenerationResult
-    parsed: ParsedOutputs
+    parsed: ParseResult
 
 
 class DecisionService:
-    """Generate once, retain raw output, then validate without silently repairing it."""
+    """Generate once, retain raw output, then validate the strict ADR contract."""
 
     async def execute(
         self,
@@ -27,11 +26,22 @@ class DecisionService:
         scenario: ScenarioRevision,
         run_id: UUID,
         cancellation: CancellationToken,
-        repair: Callable[[str], str] | None = None,
     ) -> GeneratedDecision:
         generation = await strategy.generate(scenario, cancellation=cancellation)
         cancellation.raise_if_cancelled()
         return GeneratedDecision(
             generation=generation,
-            parsed=parse_with_one_repair(generation.raw_output, run_id, repair),
+            parsed=self.parse(generation, run_id, scenario),
+        )
+
+    @staticmethod
+    def parse(
+        generation: GenerationResult, run_id: UUID, scenario: ScenarioRevision
+    ) -> ParseResult:
+        """Validate an already captured generation without modifying its raw response."""
+        return parse_adr_output(
+            generation.raw_output,
+            run_id,
+            answered_questions=[answer.question for answer in scenario.clarification_answers],
+            source_context=scenario.problem,
         )

@@ -1,0 +1,39 @@
+{
+  "name": "adr-forge",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "setup": "uv sync --frozen --extra dev && npm ci --ignore-scripts && npm --prefix apps/web ci && npm run migrate",
+    "migrate": "uv run alembic upgrade head",
+    "dev": "concurrently --kill-others --names api,web --prefix-colors blue,green \"npm:dev:api\" \"npm:dev:web\"",
+    "dev:api": "uv run uvicorn apps.api.main:app --host 127.0.0.1 --port 8000 --reload",
+    "dev:web": "VITE_API_BASE_URL=http://127.0.0.1:8000/api/v1 npm --prefix apps/web run dev",
+    "api": "npm run dev:api",
+    "web": "npm run dev:web",
+    "build": "npm --prefix apps/web run build",
+    "test": "uv run pytest -m \"not gpu and not live_integration\" && npm --prefix apps/web test",
+    "docker:build": "docker compose build",
+    "docker:up": "docker compose up",
+    "docker:down": "docker compose down"
+  },
+  "scriptsInfo": {
+    "setup": "Instala as dependências Python e Node.js e aplica as migrações do banco de dados.",
+    "migrate": "Aplica todas as migrações pendentes do banco de dados com Alembic.",
+    "dev": "Inicia a API e o frontend juntos em modo de desenvolvimento.",
+    "dev:api": "Inicia a API FastAPI em http://127.0.0.1:8000 com recarga automática.",
+    "dev:web": "Inicia o frontend Vite em http://127.0.0.1:5173.",
+    "api": "Atalho para iniciar somente a API em modo de desenvolvimento.",
+    "web": "Atalho para iniciar somente o frontend em modo de desenvolvimento.",
+    "build": "Valida o TypeScript e gera o build de produção do frontend.",
+    "test": "Executa os testes Python seguros para CPU e, depois, os testes do frontend.",
+    "docker:build": "Constrói as imagens Docker locais da API e do frontend.",
+    "docker:up": "Inicia os contêineres locais da API e do frontend.",
+    "docker:down": "Encerra e remove os contêineres locais criados pelo Docker Compose."
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1"
+  },
+  "engines": {
+    "node": ">=22.12.0"
+  }
+}

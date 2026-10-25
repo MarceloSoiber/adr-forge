@@ -11,13 +11,13 @@ WORKDIR /app
 COPY --from=ghcr.io/astral-sh/uv:0.11.28 /uv /uvx /bin/
 COPY pyproject.toml uv.lock ./
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --frozen --no-dev --no-install-project
+    uv sync --frozen --no-dev --extra ml --no-install-project
 
 COPY apps ./apps
 COPY src ./src
 COPY README.md ./
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --frozen --no-dev
+    uv sync --frozen --no-dev --extra ml
 
 FROM python:3.12-slim AS runtime
 

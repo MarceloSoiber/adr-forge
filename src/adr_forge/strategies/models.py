@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from enum import StrEnum
+from pathlib import Path
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -39,6 +40,7 @@ class AnalysisStrategy(BaseModel):
     model_id: str = Field(min_length=1)
     model_revision: str = Field(min_length=1)
     adapter_artifact_id: UUID | None = None
+    adapter_path: Path | None = None
     prompt_version: str = Field(min_length=1)
     generation_config_hash: str = Field(pattern=r"^[a-f0-9]{64}$")
     requires_retrieval: bool = False
@@ -53,3 +55,5 @@ class AnalysisStrategy(BaseModel):
             raise ValueError("requires_retrieval must match the strategy kind")
         if self.kind not in fine_tuned_kinds and self.adapter_artifact_id is not None:
             raise ValueError("only fine-tuned strategies may specify an adapter artifact")
+        if self.kind not in fine_tuned_kinds and self.adapter_path is not None:
+            raise ValueError("only fine-tuned strategies may specify an adapter path")

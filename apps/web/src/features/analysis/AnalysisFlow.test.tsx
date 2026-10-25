@@ -194,6 +194,48 @@ describe('AnalysisFlow', () => {
     return user
   }
 
+  it('mostra o Qwen não treinado mesmo quando o runtime ainda não está disponível', async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse([
+        strategy,
+        {
+          id: 'qwen3-4b-baseline',
+          version: '1',
+          kind: 'base',
+          model_id: 'qwen_qwen3-4b-instruct-2507',
+          available: false,
+          unavailable_reason: 'Configure o runtime local.',
+        },
+      ]),
+    )
+
+    renderFlow()
+
+    const option = await screen.findByRole('option', {
+      name: 'Qwen 3 4B · modelo não treinado (indisponível)',
+    })
+    expect(option).toBeDisabled()
+    expect(screen.getByText('Configure o runtime local.')).toBeInTheDocument()
+  })
+
+  it('preenche o cenário com um exemplo selecionado', async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse([strategy]))
+
+    renderFlow()
+    const user = userEvent.setup()
+    await user.click(screen.getByRole('button', { name: 'SQL ou NoSQL' }))
+
+    expect(screen.getByLabelText('Título')).toHaveValue(
+      'Persistência para pagamentos',
+    )
+    expect(screen.getByLabelText('Problema')).toHaveValue(
+      'Definir a persistência do serviço de pagamentos, estornos e conciliação diária para o lançamento inicial do produto.',
+    )
+    expect(screen.getByLabelText('Fatos')).toHaveValue(
+      'A aplicação exige transações ACID, auditoria de cada alteração e relatórios relacionais. A equipe já opera PostgreSQL e o volume inicial estimado é de até 20 mil transações por minuto. O banco deve manter histórico de estornos por sete anos.',
+    )
+  })
+
   it('envia o cenário e inicia uma execução com a estratégia selecionada', async () => {
     fetchMock
       .mockResolvedValueOnce(jsonResponse([strategy]))
@@ -255,7 +297,7 @@ describe('AnalysisFlow', () => {
         ),
       ).toBe(true),
     )
-    await waitFor(() => expect(EventSourceMock.instances).toHaveLength(2))
+    await waitFor(() => expect(EventSourceMock.instances).toHaveLength(1))
     expect(EventSourceMock.instances[0]?.close).toHaveBeenCalledOnce()
     expect(
       await screen.findByRole('heading', { name: adr.title }),
@@ -375,14 +417,31 @@ describe('AnalysisFlow', () => {
       progress_sequence: 1,
       failure_code: 'invalid_adr',
       failure_detail: 'A resposta do modelo não respeita o esquema ADR.',
+      validation_attempts: [
+        {
+          findings: [
+            {
+              code: 'missing',
+              path: '/title',
+              severity: 'error',
+              message: 'Campo obrigatório ausente.',
+            },
+          ],
+        },
+      ],
       updated_at: '2026-10-13T10:02:00Z',
     })
 
     expect(
       await screen.findByText(
-        'A resposta do modelo não respeita o esquema ADR.',
+        'O modelo retornou uma resposta que não atende ao esquema ADR. Revise os campos indicados e a resposta recebida abaixo.',
       ),
     ).toBeInTheDocument()
+    expect(
+      screen.getByText('Ver o que precisa ser corrigido (1)'),
+    ).toBeInTheDocument()
+    expect(screen.getByText('Campo: title')).toBeInTheDocument()
+    expect(screen.getByText('Campo obrigatório ausente.')).toBeInTheDocument()
     expect(
       fetchMock.mock.calls.some(([url]) =>
         String(url).includes(`/analysis-runs/${runId}/adr`),

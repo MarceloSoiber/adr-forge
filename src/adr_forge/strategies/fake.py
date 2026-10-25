@@ -53,7 +53,14 @@ class FakeStrategy(StructuredOutputStrategy):
                 }
             ]
         context_findings = classify_context(scenario)
-        needs_clarification = any(finding.severity == "error" for finding in context_findings)
+        answered_question_ids = {answer.question_id for answer in scenario.clarification_answers}
+        needs_clarification = (
+            (not scenario.facts and "context-scale" not in answered_question_ids)
+            or (not scenario.constraints and "context-constraints" not in answered_question_ids)
+            or any(
+                finding.code == "context.contradictory_constraints" for finding in context_findings
+            )
+        )
         if needs_clarification and not assumptions:
             assumptions = [
                 {
@@ -67,7 +74,7 @@ class FakeStrategy(StructuredOutputStrategy):
             ]
         questions = []
         if needs_clarification:
-            if not scenario.facts:
+            if not scenario.facts and "context-scale" not in answered_question_ids:
                 questions.append(
                     {
                         "id": "context-scale",
@@ -75,7 +82,7 @@ class FakeStrategy(StructuredOutputStrategy):
                         "impact": "Define capacidade e custo operacional.",
                     }
                 )
-            if not scenario.constraints:
+            if not scenario.constraints and "context-constraints" not in answered_question_ids:
                 questions.append(
                     {
                         "id": "context-constraints",
@@ -142,3 +149,14 @@ class FakeStrategy(StructuredOutputStrategy):
             raw_output=json.dumps(payload, ensure_ascii=False),
             telemetry=GenerationTelemetry(latency_ms=int((perf_counter() - started) * 1000)),
         )
+
+    async def repair(
+        self,
+        scenario: ScenarioRevision,
+        raw_output: str,
+        findings: list[dict[str, object]],
+        *,
+        cancellation: CancellationToken,
+    ) -> GenerationResult:
+        del raw_output, findings
+        return await self.generate(scenario, cancellation=cancellation)

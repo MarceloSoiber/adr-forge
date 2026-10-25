@@ -18,6 +18,9 @@ class RunRepository:
         values = dict(run)
         values["id"] = str(values["id"])
         values["scenario_revision_id"] = str(values["scenario_revision_id"])
+        for field in ("retrieval_snapshot_id", "experiment_id"):
+            if values.get(field) is not None:
+                values[field] = str(values[field])
         values["validation_attempts_json"] = json.dumps(
             values.pop("validation_attempts"), default=str
         )
@@ -25,11 +28,15 @@ class RunRepository:
             await session.execute(
                 text(
                     """INSERT INTO analysis_runs (id, scenario_revision_id, strategy_id,
-                    strategy_version, status, stage, progress_percent, progress_sequence,
+                    strategy_version, retrieval_snapshot_id, experiment_id, scenario_content_hash,
+                    strategy_configuration_hash, generation_config_hash, status, stage,
+                    progress_percent, progress_sequence,
                     validation_attempts_json, input_tokens, output_tokens, latency_ms, peak_vram_mb,
                     created_at, updated_at)
                     VALUES (:id, :scenario_revision_id, :strategy_id, :strategy_version,
-                    :status, :stage, :progress_percent, :progress_sequence,
+                    :retrieval_snapshot_id, :experiment_id, :scenario_content_hash,
+                    :strategy_configuration_hash, :generation_config_hash, :status, :stage,
+                    :progress_percent, :progress_sequence,
                     :validation_attempts_json, :input_tokens, :output_tokens, :latency_ms,
                     :peak_vram_mb, :created_at, :updated_at)"""
                 ),
@@ -106,6 +113,27 @@ class RunRepository:
             run["validation_attempts"] = json.loads(run.pop("validation_attempts_json"))
         return result
 
+    async def list_by_experiment(self, experiment_id: str) -> list[dict[str, Any]]:
+        """Return persisted executions belonging to one immutable experiment."""
+        async with self._session_factory() as session:
+            rows = (
+                (
+                    await session.execute(
+                        text(
+                            "SELECT * FROM analysis_runs WHERE experiment_id = :experiment_id "
+                            "ORDER BY created_at"
+                        ),
+                        {"experiment_id": experiment_id},
+                    )
+                )
+                .mappings()
+                .all()
+            )
+        result = [dict(row) for row in rows]
+        for run in result:
+            run["validation_attempts"] = json.loads(run.pop("validation_attempts_json"))
+        return result
+
     async def list_events(self, run_id: str) -> list[dict[str, Any]]:
         async with self._session_factory() as session:
             rows = (
@@ -147,6 +175,9 @@ class RunRepository:
         """Persist a new run snapshot and its replayable event in one transaction."""
         values = dict(run)
         values["id"] = str(values["id"])
+        for field in ("raw_output_artifact_id", "repaired_output_artifact_id"):
+            if values.get(field) is not None:
+                values[field] = str(values[field])
         values["validation_attempts_json"] = json.dumps(
             values.pop("validation_attempts", []), default=str
         )
@@ -162,7 +193,10 @@ class RunRepository:
                         updated_at = :updated_at,
                         started_at = :started_at, finished_at = :finished_at,
                         input_tokens = :input_tokens, output_tokens = :output_tokens,
-                        latency_ms = :latency_ms, peak_vram_mb = :peak_vram_mb
+                        latency_ms = :latency_ms, peak_vram_mb = :peak_vram_mb,
+                        failure_code = :failure_code, failure_detail = :failure_detail,
+                        raw_output_artifact_id = :raw_output_artifact_id,
+                        repaired_output_artifact_id = :repaired_output_artifact_id
                         WHERE id = :id AND progress_sequence = :expected_sequence"""
                     ),
                     {**values, "expected_sequence": expected_sequence},

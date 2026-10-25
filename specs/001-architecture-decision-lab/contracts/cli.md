@@ -51,17 +51,25 @@ latency, resource use, model and dataset identities, configuration, and reproduc
 
 ### `adr-forge artifacts list`
 
-Lists artifact kind, hash, size, retention state, references, and total budget use.
+Lists artifact ID, kind, hash, size, retention state, reference count, and total budget use in a
+deterministic order. `--json` returns `artifacts`, `artifact_count`, `used_bytes`, `warning_bytes`,
+`limit_bytes`, `free_bytes`, and `reserve_bytes`; it never mutates or reconciles storage.
 
 ### `adr-forge artifacts prune --confirm`
 
-Deletes only unreferenced artifacts marked `prunable` or expired `temporary`. It reports reclaimed
-bytes and preserves metadata audit records.
+Deletes only unreferenced artifacts marked `prunable` or expired `temporary`. Omission of
+`--confirm` performs no mutation and exits `3`. Success reports `operation_id`, selected/deleted/
+failed counts, reclaimed bytes, and one result per candidate. Every successful deletion preserves
+an append-only metadata audit record. Referenced, `keep`, non-expired temporary, and unsafe-path
+artifacts are never candidates.
 
 ### `adr-forge database backup --output PATH`
 
-Creates a consistent SQLite backup plus a manifest containing timestamp, schema revision, size, and
-hash.
+Creates a consistent SQLite backup plus a canonical JSON manifest containing format version, UTC
+timestamp, schema revision, byte size, SHA-256, and application version. The output path must not
+be the configured live database or an existing file. Publication uses temporary siblings and does
+not leave a database or manifest on failure. `--json` returns both output paths and all manifest
+fields.
 
 ## Progress Output
 
