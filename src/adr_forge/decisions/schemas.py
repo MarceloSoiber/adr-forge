@@ -22,6 +22,7 @@ class ADRStatus(StrEnum):
 class EvidenceKind(StrEnum):
     FACT = "fact"
     ASSUMPTION = "assumption"
+    CONSTRAINT = "constraint"
     REFERENCE = "reference"
 
 

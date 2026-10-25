@@ -43,4 +43,5 @@ class DecisionService:
             generation.raw_output,
             run_id,
             answered_questions=[answer.question for answer in scenario.clarification_answers],
+            source_context=scenario.problem,
         )

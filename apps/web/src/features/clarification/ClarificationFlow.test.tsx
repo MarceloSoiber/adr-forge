@@ -136,6 +136,12 @@ it('cria uma revisão e inicia nova execução sem alterar o fluxo provisório',
     screen.getByRole('button', { name: 'Enviar esclarecimentos' }),
   )
   await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(6))
+  expect(
+    screen.getByRole('heading', { name: 'Esclarecimentos respondidos' }),
+  ).toBeInTheDocument()
+  expect(screen.getByText('Revisão 2')).toBeInTheDocument()
+  expect(screen.getByText('Até dez mil itens.')).toBeInTheDocument()
+  expect(screen.getByText('Qual é a escala esperada?')).toBeInTheDocument()
   expect(JSON.parse(String(fetchMock.mock.calls[4]?.[1]?.body))).toMatchObject({
     base_revision_number: 1,
     clarification_answers: [

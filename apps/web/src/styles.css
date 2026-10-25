@@ -921,6 +921,117 @@ textarea:focus {
   color: #a04a37;
   outline: none;
 }
+.clarification-history {
+  margin-top: 1rem;
+  padding: 1.35rem 1.5rem;
+  border: 1px solid #d8d1c5;
+  border-radius: 0.8rem;
+  background:
+    linear-gradient(135deg, rgba(39, 35, 63, 0.035), transparent 42%),
+    #fffdf8;
+}
+.clarification-history__heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: flex-start;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid #e3ddd3;
+}
+.clarification-history__heading h2 {
+  margin: 0.25rem 0 0;
+  color: #27233f;
+  font-size: 1.25rem;
+  letter-spacing: -0.03em;
+}
+.clarification-history__heading > span {
+  color: #d4684c;
+  font:
+    800 1.5rem ui-monospace,
+    monospace;
+}
+.clarification-history__list {
+  display: grid;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.clarification-history__item {
+  display: grid;
+  grid-template-columns: 2.25rem minmax(0, 1fr);
+  gap: 0.85rem;
+  padding-top: 1rem;
+}
+.clarification-history__rail {
+  position: relative;
+  display: flex;
+  justify-content: center;
+}
+.clarification-history__rail::after {
+  position: absolute;
+  top: 1.75rem;
+  bottom: -1rem;
+  width: 1px;
+  background: #ddd7cd;
+  content: '';
+}
+.clarification-history__item:last-child .clarification-history__rail::after {
+  display: none;
+}
+.clarification-history__rail span {
+  z-index: 1;
+  display: grid;
+  width: 1.75rem;
+  height: 1.75rem;
+  place-items: center;
+  color: #fff;
+  border-radius: 50%;
+  background: #27233f;
+  font:
+    700 0.68rem ui-monospace,
+    monospace;
+}
+.clarification-history__revision {
+  margin: 0 0 0.3rem;
+  color: #a04a37;
+  font:
+    700 0.62rem ui-monospace,
+    monospace;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.clarification-history__content h3 {
+  margin: 0;
+  color: #27233f;
+  font-size: 0.98rem;
+  line-height: 1.4;
+}
+.clarification-history__impact {
+  margin: 0.35rem 0 0.7rem;
+  color: #6e687b;
+  font-size: 0.8rem;
+}
+.clarification-history blockquote {
+  margin: 0;
+  padding: 0.75rem 0.9rem;
+  border-left: 3px solid #d4684c;
+  background: #fff8f2;
+}
+.clarification-history blockquote span {
+  color: #95806d;
+  font:
+    700 0.6rem ui-monospace,
+    monospace;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+.clarification-history blockquote p {
+  margin: 0.3rem 0 0;
+  color: #3f394f;
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
 
 /* About page — a compact editorial manifesto for the project. */
 .about-page {

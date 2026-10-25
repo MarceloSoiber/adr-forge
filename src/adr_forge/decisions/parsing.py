@@ -22,7 +22,11 @@ class ParseResult:
 
 
 def parse_adr_output(
-    raw_output: str, analysis_run_id: UUID, *, answered_questions: list[str] | None = None
+    raw_output: str,
+    analysis_run_id: UUID,
+    *,
+    answered_questions: list[str] | None = None,
+    source_context: str | None = None,
 ) -> ParseResult:
     """Parse a model response while preserving its original captured content."""
     try:
@@ -54,7 +58,9 @@ def parse_adr_output(
             ],
         )
     normalization_findings = _normalize_model_equivalents(
-        payload, answered_questions=answered_questions or []
+        payload,
+        answered_questions=answered_questions or [],
+        source_context=source_context,
     )
     payload["analysis_run_id"] = str(analysis_run_id)
     try:
@@ -81,10 +87,54 @@ def parse_adr_output(
 
 
 def _normalize_model_equivalents(
-    payload: dict[str, object], *, answered_questions: list[str]
+    payload: dict[str, object], *, answered_questions: list[str], source_context: str | None
 ) -> list[ValidationFinding]:
     """Canonicalize a few unambiguous model representations at the parsing boundary."""
     findings: list[ValidationFinding] = []
+    context = payload.get("context")
+    if isinstance(context, list) and not context and source_context and source_context.strip():
+        payload["context"] = [source_context.strip()]
+        findings.append(
+            _normalized_finding(
+                "/context",
+                "Empty context was restored from the source scenario.",
+            )
+        )
+
+    constraints = payload.get("constraints")
+    if isinstance(constraints, list):
+        normalized_constraints: list[object] = []
+        for index, constraint in enumerate(constraints):
+            if isinstance(constraint, dict):
+                text = constraint.get("text")
+                if isinstance(text, str) and text.strip():
+                    normalized_constraints.append(text.strip())
+                    findings.append(
+                        _normalized_finding(
+                            f"/constraints/{index}",
+                            "Constraint object was converted to its text value.",
+                        )
+                    )
+                    continue
+            normalized_constraints.append(constraint)
+        payload["constraints"] = normalized_constraints
+
+    confidence_aliases = {"low": 0.25, "medium": 0.5, "high": 0.75}
+    assumptions = payload.get("assumptions")
+    if isinstance(assumptions, list):
+        for index, assumption in enumerate(assumptions):
+            if not isinstance(assumption, dict):
+                continue
+            confidence = assumption.get("confidence")
+            if isinstance(confidence, str) and confidence.casefold() in confidence_aliases:
+                assumption["confidence"] = confidence_aliases[confidence.casefold()]
+                findings.append(
+                    _normalized_finding(
+                        f"/assumptions/{index}/confidence",
+                        "Qualitative confidence was converted to a numeric score.",
+                    )
+                )
+
     risks = payload.get("risks")
     if isinstance(risks, list):
         for index, risk in enumerate(risks):
@@ -162,7 +212,6 @@ def _normalize_model_equivalents(
                 remaining_questions.append(question)
 
         if not remaining_questions:
-            assumptions = payload.get("assumptions")
             if isinstance(assumptions, list):
                 for index, assumption in enumerate(assumptions[:3]):
                     if not isinstance(assumption, dict):
@@ -174,10 +223,13 @@ def _normalize_model_equivalents(
                     if not isinstance(impact, str) or not impact.strip():
                         continue
                     assumption_id = str(assumption.get("id") or index)
+                    confirmation = f"A premissa a seguir está correta? {statement}"
+                    if _normalized_text(confirmation) in answered:
+                        continue
                     remaining_questions.append(
                         {
                             "id": f"confirm-assumption-{assumption_id}",
-                            "question": f"A premissa a seguir está correta? {statement}",
+                            "question": confirmation,
                             "impact": impact,
                         }
                     )
@@ -187,6 +239,38 @@ def _normalize_model_equivalents(
                             "Provisional assumption was converted to a confirmation question.",
                         )
                     )
+                    break
+            if not remaining_questions:
+                candidates = (
+                    (
+                        "missing-alternatives",
+                        "Quais alternativas técnicas devem ser comparadas antes da decisão?",
+                        "As alternativas definem o espaço real de decisão.",
+                    ),
+                    (
+                        "missing-review-criteria",
+                        "Quais métricas objetivas devem determinar a revisão desta decisão?",
+                        "Critérios mensuráveis permitem validar a decisão após o lançamento.",
+                    ),
+                    (
+                        "missing-operational-risk",
+                        "Qual risco operacional ainda precisa ser considerado nesta decisão?",
+                        "Riscos pendentes podem alterar a recomendação e suas salvaguardas.",
+                    ),
+                )
+                for question_id, question_text, impact in candidates:
+                    if _normalized_text(question_text) in answered:
+                        continue
+                    remaining_questions.append(
+                        {"id": question_id, "question": question_text, "impact": impact}
+                    )
+                    findings.append(
+                        _normalized_finding(
+                            "/unresolved_questions/0",
+                            "A new decision gap replaced questions already answered.",
+                        )
+                    )
+                    break
         payload["unresolved_questions"] = remaining_questions
     return findings
 

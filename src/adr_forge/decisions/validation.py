@@ -156,6 +156,10 @@ def validate_adr_draft(
                 link.evidence_kind == EvidenceKind.ASSUMPTION and link.evidence_id in assumption_ids
             )
             or (
+                link.evidence_kind == EvidenceKind.CONSTRAINT
+                and link.evidence_id in constraint_ids
+            )
+            or (
                 link.evidence_kind == EvidenceKind.REFERENCE
                 and link.evidence_id in draft.reference_ids
             )

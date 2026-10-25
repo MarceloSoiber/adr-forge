@@ -89,6 +89,36 @@ def test_proposed_adr_requires_two_viable_alternatives() -> None:
     assert "alternatives.minimum_viable" in _finding_codes(draft)
 
 
+def test_rationale_accepts_an_existing_constraint_as_evidence() -> None:
+    draft = _validated_copy(
+        _proposed_draft(),
+        rationale=[
+            RationaleLink(
+                claim="A opção respeita o orçamento operacional.",
+                evidence_kind="constraint",
+                evidence_id="constraint:0",
+            )
+        ],
+    )
+
+    assert "rationale.evidence_unknown" not in _finding_codes(draft)
+
+
+def test_rationale_rejects_an_unknown_constraint_as_evidence() -> None:
+    draft = _validated_copy(
+        _proposed_draft(),
+        rationale=[
+            RationaleLink(
+                claim="A opção respeita uma restrição inexistente.",
+                evidence_kind="constraint",
+                evidence_id="constraint:99",
+            )
+        ],
+    )
+
+    assert "rationale.evidence_unknown" in _finding_codes(draft)
+
+
 def test_provisional_adr_rejects_a_question_already_answered() -> None:
     question = UnresolvedQuestion(
         id="integrity",

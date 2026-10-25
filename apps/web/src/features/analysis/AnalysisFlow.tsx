@@ -10,6 +10,10 @@ import {
 } from '../../services/api'
 import { subscribeToRunEvents } from '../../services/runEvents'
 import { ClarificationPanel } from '../clarification/ClarificationPanel'
+import {
+  ClarificationHistory,
+  type ClarificationHistoryEntry,
+} from '../clarification/ClarificationHistory'
 import { AdrView } from './components/AdrView'
 import { RunProgress } from './components/RunProgress'
 import { ScenarioForm } from './components/ScenarioForm'
@@ -39,6 +43,9 @@ export function AnalysisFlow() {
   const [error, setError] = useState<ProblemDetail | null>(null)
   const [isStarting, setIsStarting] = useState(false)
   const [isContinuing, setIsContinuing] = useState(false)
+  const [clarificationHistory, setClarificationHistory] = useState<
+    ClarificationHistoryEntry[]
+  >([])
   const eventSource = useRef<EventSource | null>(null)
 
   useEffect(() => {
@@ -130,6 +137,7 @@ export function AnalysisFlow() {
       setRun(next)
       setAdr(null)
       setRawOutput(null)
+      setClarificationHistory([])
       setShowClarification(true)
       if (next.status === 'invalid_output') await loadRawOutput(next.id)
       subscribe(next.id)
@@ -157,6 +165,21 @@ export function AnalysisFlow() {
     answers: Array<{ question_id: string; answer: string }>,
   ) {
     if (!scenario || !run || !strategy) return
+    const answeredEntries = answers.flatMap((answer) => {
+      const question = adr?.unresolved_questions?.find(
+        (candidate) => candidate.id === answer.question_id,
+      )
+      return question
+        ? [
+            {
+              questionId: question.id,
+              question: question.question,
+              impact: question.impact,
+              answer: answer.answer,
+            },
+          ]
+        : []
+    })
     setIsContinuing(true)
     try {
       let revision
@@ -174,6 +197,13 @@ export function AnalysisFlow() {
         }
         throw reason
       }
+      setClarificationHistory((previous) => [
+        ...previous,
+        ...answeredEntries.map((entry) => ({
+          ...entry,
+          revisionNumber: revision.revision_number,
+        })),
+      ])
       const selected = strategies.find((item) => item.id === strategy)
       if (!selected) return
       const next = await analysisApi.createRun({
@@ -222,6 +252,7 @@ export function AnalysisFlow() {
         isStarting={isStarting}
         isContinuing={isContinuing}
       />
+      <ClarificationHistory entries={clarificationHistory} />
       <AdrView adr={adr} onExport={() => void exportMarkdown()} />
       {showClarification &&
         !isStarting &&

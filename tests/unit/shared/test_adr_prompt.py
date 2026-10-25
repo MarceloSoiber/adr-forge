@@ -31,9 +31,13 @@ def test_prompt_describes_the_nested_adr_contract() -> None:
 
     assert 'schema_version deve ser "adr-v1"' in prompt
     assert "context, facts, constraints" in prompt
+    assert "context deve conter pelo menos um item" in prompt
+    assert "constraints deve conter somente textos" in prompt
+    assert "confidence de cada assumption deve ser um número" in prompt
     assert "Cada assumption é {id, statement, impact, confidence}" in prompt
     assert "unresolved_question é {id, question, impact}" in prompt
-    assert 'evidence_kind aceita somente "fact", "assumption" ou "reference"' in prompt
+    assert 'evidence_kind aceita somente "fact", "assumption", "constraint"' in prompt
+    assert 'restrições usam "constraint:0", "constraint:1"' in prompt
     assert "qualquer texto antes ou depois do JSON" in prompt
     assert 'likelihood e impact aceitam somente as strings "low", "medium" ou "high"' in prompt
     assert 'fatos usam "fact:0", "fact:1"' in prompt
@@ -84,5 +88,7 @@ def test_repair_prompt_preserves_the_raw_response_and_validation_findings() -> N
     assert "nunca retorne unresolved_questions vazio" in prompt
     assert '"id":"pergunta-1"' in prompt
     assert "remova notas, explicações" in prompt
-    assert 'evidence_kind deve ser somente "fact", "assumption" ou "reference"' in prompt
+    assert 'evidence_kind deve ser somente "fact", "assumption", "constraint"' in prompt
     assert "Converta likelihood e impact numéricos" in prompt
+    assert "constraints deve ser uma lista de strings" in prompt
+    assert "Não repita em unresolved_questions" in prompt

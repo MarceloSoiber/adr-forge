@@ -16,7 +16,6 @@ type NavigationItem = {
 const navigation: NavigationItem[] = [
   { label: 'Testar IA', icon: '✦', view: 'analysis' },
   { label: 'Treinamento', icon: '◌', view: 'training' },
-  { label: 'Experimentos', icon: '⌁' },
   { label: 'Base de dados', icon: '▣', view: 'dataset' },
   { label: 'Sobre', icon: 'i', view: 'about' },
 ]

@@ -67,6 +67,90 @@ def test_parser_normalizes_unambiguous_model_equivalents() -> None:
     assert len([finding for finding in result.findings if finding.code == "output.normalized"]) == 4
 
 
+def test_parser_restores_source_context_and_flattens_constraint_objects() -> None:
+    import json
+
+    payload = _valid_payload()
+    payload["context"] = []
+    payload["constraints"] = [
+        {"id": "constraint:0", "text": "Integridade financeira é obrigatória."},
+        "O lançamento deve ocorrer em oito semanas.",
+    ]
+
+    result = parse_adr_output(
+        json.dumps(payload),
+        uuid4(),
+        source_context="Escolher a persistência para o serviço de pagamentos.",
+    )
+
+    assert result.draft is not None
+    assert result.draft.context == ["Escolher a persistência para o serviço de pagamentos."]
+    assert result.draft.constraints == [
+        "Integridade financeira é obrigatória.",
+        "O lançamento deve ocorrer em oito semanas.",
+    ]
+    normalized_paths = {
+        finding.path for finding in result.findings if finding.code == "output.normalized"
+    }
+    assert {"/context", "/constraints/0"} <= normalized_paths
+
+
+def test_parser_converts_qualitative_assumption_confidence() -> None:
+    import json
+
+    payload = _valid_payload()
+    assumptions = payload["assumptions"]
+    assert isinstance(assumptions, list)
+    assert isinstance(assumptions[0], dict)
+    assumptions[0]["confidence"] = "high"
+
+    result = parse_adr_output(json.dumps(payload), uuid4())
+
+    assert result.draft is not None
+    assert result.draft.assumptions[0].confidence == 0.75
+
+
+def test_parser_accepts_constraint_rationale_from_model_output() -> None:
+    import json
+
+    payload = _valid_payload()
+    payload["rationale"] = [
+        {
+            "claim": "A solução preserva a integridade financeira.",
+            "evidence_kind": "constraint",
+            "evidence_id": "constraint:0",
+        }
+    ]
+
+    result = parse_adr_output(json.dumps(payload), uuid4())
+
+    assert result.draft is not None
+    assert not any(finding.severity == "error" for finding in result.findings)
+
+
+def test_parser_does_not_recreate_an_answered_assumption_question() -> None:
+    import json
+
+    payload = _valid_payload()
+    answered = "A premissa a seguir está correta? O volume continuará moderado."
+    payload["unresolved_questions"] = [
+        {"id": "q1", "question": answered, "impact": "Pode exigir revisão futura."}
+    ]
+
+    result = parse_adr_output(
+        json.dumps(payload),
+        uuid4(),
+        answered_questions=[answered],
+    )
+
+    assert result.draft is not None
+    assert result.draft.unresolved_questions[0].id == "missing-alternatives"
+    assert result.draft.unresolved_questions[0].question != answered
+    assert "unresolved_questions.already_answered" not in {
+        finding.code for finding in result.findings
+    }
+
+
 def test_parser_replaces_answered_question_with_assumption_confirmation() -> None:
     import json
 
