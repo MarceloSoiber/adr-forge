@@ -7,6 +7,9 @@ ADR Forge compares baseline, structured prompting, context retrieval (RAG), fine
 approaches. It organizes scenarios, maintains result traceability, and provides deterministic
 validation and blind human comparison. The architect remains responsible for the final decision.
 
+<img width="1920" height="1080" alt="Screenshot From 2026-10-25 10-28-05" src="https://github.com/user-attachments/assets/b7341d77-88ad-4f9f-947e-87e6cc7cacd7" />
+
+
 > [!IMPORTANT]
 > This is an experimental, local application. It has no authentication or TLS and must remain bound
 > to a loopback address. Do not expose it to a local network or the internet.
