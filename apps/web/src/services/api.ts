@@ -59,6 +59,40 @@ export type CreateScenarioInput = {
   constraints: string[]
 }
 
+export type DatasetRecord = {
+  id: string
+  title: string
+  domain: string
+  status: string
+  tokens: number
+  context_excerpt: string
+  decision_excerpt: string | null
+  confidence: number | null
+}
+
+export type DatasetSummary = {
+  version: string
+  output_format: string
+  schema_version: string
+  record_count: number
+  source_count: number
+  total_bytes: number
+  approximate_tokens: number
+  manifest_sha256: string
+  artifact_sha256: string
+  generated_at: string
+  records: DatasetRecord[]
+  status_counts: Record<string, number>
+  domain_counts: Record<string, number>
+}
+
+export type DatasetRecordPage = {
+  items: DatasetRecord[]
+  total: number
+  offset: number
+  limit: number
+}
+
 async function request(path: string, init?: RequestInit): Promise<Response> {
   const response = await fetch(`${apiBaseUrl}${path}`, init)
   if (!response.ok) {
@@ -135,5 +169,20 @@ export const analysisApi = {
         body: JSON.stringify(input),
       })
     ).json()) as ScenarioRevision
+  },
+}
+
+export const datasetApi = {
+  async getCurrent(): Promise<DatasetSummary> {
+    return (await (await request('/datasets/current')).json()) as DatasetSummary
+  },
+  async listRecords(offset = 0, limit = 12): Promise<DatasetRecordPage> {
+    const query = new URLSearchParams({
+      offset: String(offset),
+      limit: String(limit),
+    })
+    return (await (
+      await request(`/datasets/current/records?${query}`)
+    ).json()) as DatasetRecordPage
   },
 }

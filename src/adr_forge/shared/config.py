@@ -47,6 +47,8 @@ class Settings(BaseSettings):
     artifact_free_disk_reserve_bytes: Annotated[int, Field(gt=0)] = (
         DEFAULT_ARTIFACT_FREE_DISK_RESERVE_BYTES
     )
+    dataset_manifest_path: Path = Path("./datasets/manifests/v0.4.0-adr-dialogue.json")
+    dataset_training_path: Path = Path("./data/datasets/v0.4.0-adr-dialogue/training.jsonl")
     knowledge_hub_base_url: AnyHttpUrl = Field(
         default=AnyHttpUrl("http://127.0.0.1:8001"),
         validation_alias=AliasChoices("KNOWLEDGE_HUB_BASE_URL", "ADR_FORGE_KNOWLEDGE_HUB_BASE_URL"),
@@ -84,7 +86,13 @@ class Settings(BaseSettings):
     def loopback_hosts_only(cls, value: str) -> str:
         return _validate_loopback(value)
 
-    @field_validator("artifact_root", "hf_home", "adapter_manifest_path")
+    @field_validator(
+        "artifact_root",
+        "hf_home",
+        "adapter_manifest_path",
+        "dataset_manifest_path",
+        "dataset_training_path",
+    )
     @classmethod
     def typed_paths(cls, value: Path | None) -> Path | None:
         return value.expanduser() if value is not None else None
