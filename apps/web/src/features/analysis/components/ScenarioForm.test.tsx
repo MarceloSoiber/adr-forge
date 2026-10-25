@@ -1,4 +1,5 @@
 import { render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 
 import { ScenarioForm } from './ScenarioForm'
@@ -44,5 +45,40 @@ describe('ScenarioForm', () => {
         name: 'Qwen/Qwen3-4B-Instruct-2507 · adaptador treinado',
       }),
     ).toHaveLength(1)
+  })
+
+  it('carrega um cenário completo de validação com um clique', async () => {
+    const onTitleChange = vi.fn()
+    const onProblemChange = vi.fn()
+    const onFactsChange = vi.fn()
+    const onConstraintsChange = vi.fn()
+
+    render(
+      <ScenarioForm
+        strategies={[]}
+        title=""
+        problem=""
+        facts=""
+        constraints=""
+        strategy=""
+        strategiesLoading={false}
+        isStarting={false}
+        onTitleChange={onTitleChange}
+        onProblemChange={onProblemChange}
+        onFactsChange={onFactsChange}
+        onConstraintsChange={onConstraintsChange}
+        onStrategyChange={vi.fn()}
+        onSubmit={vi.fn()}
+      />,
+    )
+
+    await userEvent.setup().click(
+      screen.getByRole('button', { name: 'Containers ou serverless' }),
+    )
+
+    expect(onTitleChange).toHaveBeenCalledWith('Execução de conciliação financeira')
+    expect(onProblemChange).toHaveBeenCalledWith(expect.stringContaining('máquinas virtuais'))
+    expect(onFactsChange).toHaveBeenCalledWith(expect.stringContaining('8 milhões'))
+    expect(onConstraintsChange).toHaveBeenCalledWith(expect.stringContaining('R$ 12 mil'))
   })
 })

@@ -41,6 +41,46 @@ const inputPresets: InputPreset[] = [
     constraints:
       'O envio não deve bloquear a interface, trabalhos não podem se perder após falhas e o custo de infraestrutura deve crescer conforme o volume. A solução precisa permitir retentativas idempotentes.',
   },
+  {
+    label: 'SQL ou NoSQL · telemetria',
+    title: 'Persistência de telemetria industrial',
+    problem:
+      'Definir a persistência para telemetria de 18 mil equipamentos industriais, comparando banco relacional, documentos e séries temporais para ingestão e consulta operacional.',
+    facts:
+      'Cada equipamento envia uma medição a cada cinco segundos, totalizando cerca de 310 milhões de eventos por dia. Os eventos são imutáveis, possuem até 40 atributos variáveis e são consultados principalmente por equipamento e janela de tempo. Dados brutos ficam disponíveis por 90 dias e agregados horários por cinco anos. A equipe opera PostgreSQL, mas não possui experiência com clusters NoSQL.',
+    constraints:
+      'A ingestão deve sustentar picos de 12 mil eventos por segundo sem perda. Consultas das últimas 24 horas precisam responder em até dois segundos no percentil 95. O sistema deve operar em duas zonas, ter custo mensal máximo de R$ 18 mil e entrar em produção em quatro meses com uma equipe de cinco pessoas.',
+  },
+  {
+    label: 'Monólito ou serviços · escala',
+    title: 'Evolução da plataforma de marketplace',
+    problem:
+      'Decidir se a plataforma de marketplace deve continuar como monólito modular ou separar domínios em microsserviços durante a expansão para três países.',
+    facts:
+      'A plataforma possui catálogo, pedidos, pagamentos, logística e repasses. O monólito atende 2 milhões de pedidos por mês e realiza implantação semanal. Existem quatro equipes com seis pessoas cada, responsáveis por domínios distintos, e falhas no catálogo não devem interromper pagamentos. Os módulos atuais têm fronteiras documentadas, mas compartilham 38 tabelas.',
+    constraints:
+      'A migração não pode interromper vendas nem reduzir a rastreabilidade financeira. O orçamento permite seis meses de evolução incremental, mas não uma reescrita total. Cada equipe deve conseguir implantar seu domínio de forma independente e a operação deve manter recuperação em até 30 minutos.',
+  },
+  {
+    label: 'Containers ou serverless',
+    title: 'Execução de conciliação financeira',
+    problem:
+      'Escolher entre containers gerenciados, funções serverless e máquinas virtuais para executar a conciliação financeira diária e seus reprocessamentos sob demanda.',
+    facts:
+      'A carga diária inicia às 2h, processa 8 milhões de lançamentos em aproximadamente 70 minutos e permanece ociosa no restante do dia. Reprocessamentos de até 500 mil lançamentos ocorrem cerca de quatro vezes por semana. Cada lote precisa de 8 GB de memória, pode durar 25 minutos e já é empacotado em container. A equipe domina Kubernetes apenas em nível básico.',
+    constraints:
+      'A conciliação deve terminar antes das 5h, possuir execução idempotente, trilha de auditoria por sete anos e recuperação automática após falhas. Dados financeiros não podem sair da região brasileira. O custo de computação deve permanecer abaixo de R$ 12 mil por mês e a solução deve estar operacional em dez semanas.',
+  },
+  {
+    label: 'Síncrono ou assíncrono · pedidos',
+    title: 'Confirmação e faturamento de pedidos',
+    problem:
+      'Definir quais etapas da criação de pedidos devem permanecer síncronas e quais devem ser processadas de forma assíncrona entre checkout, estoque, pagamento, faturamento e notificações.',
+    facts:
+      'O checkout recebe 350 requisições por segundo em média e picos de 1.400 durante campanhas. Reserva de estoque e autorização de pagamento precisam informar sucesso ou falha ao cliente. A emissão fiscal leva entre 2 e 40 segundos e notificações podem atrasar até cinco minutos. Os provedores externos apresentam falhas transitórias em cerca de 0,8% das chamadas.',
+    constraints:
+      'A resposta do checkout deve ocorrer em até 1,5 segundo no percentil 95. Nenhum pedido pode ser cobrado sem reserva de estoque, mensagens não podem ser perdidas e reprocessamentos devem ser idempotentes. O desenho precisa suportar auditoria ponta a ponta e implantação gradual sem indisponibilidade.',
+  },
 ]
 
 type ScenarioFormProps = {
