@@ -1,248 +1,332 @@
 # ADR Forge
 
-Laboratório local-first para análise de decisões arquiteturais, geração de Architecture Decision
-Records (ADRs) e avaliação reproduzível de diferentes estratégias de uso de modelos de linguagem.
+Local-first laboratory for analyzing architectural decisions, generating Architecture Decision
+Records (ADRs), and reproducibly evaluating different language-model strategies.
 
-O ADR Forge compara abordagens baseline, prompt estruturado, recuperação de contexto (RAG),
-fine-tuning e estratégias híbridas. A ferramenta organiza cenários, mantém rastreabilidade dos
-resultados e oferece validação determinística e comparação humana cega. A decisão final continua
-sendo responsabilidade do arquiteto.
+ADR Forge compares baseline, structured prompting, context retrieval (RAG), fine-tuning, and hybrid
+approaches. It organizes scenarios, maintains result traceability, and provides deterministic
+validation and blind human comparison. The architect remains responsible for the final decision.
 
 > [!IMPORTANT]
-> Este é um projeto experimental e local. A aplicação não possui autenticação nem TLS e deve
-> permanecer vinculada ao endereço de loopback. Não a exponha na rede local ou na internet.
+> This is an experimental, local application. It has no authentication or TLS and must remain bound
+> to a loopback address. Do not expose it to a local network or the internet.
 
-## Conteúdo
+## Contents
 
-- [Estado atual](#estado-atual)
-- [Funcionalidades](#funcionalidades)
-- [Escopo de decisões](#escopo-de-decisões)
-- [Arquitetura](#arquitetura)
-- [Início rápido](#início-rápido)
-- [Comandos npm](#comandos-npm)
-- [Configuração](#configuração)
-- [Execução manual](#execução-manual)
+- [Current status](#current-status)
+- [Features](#features)
+- [How the workflow works](#how-the-workflow-works)
+- [Decision scope](#decision-scope)
+- [Architecture](#architecture)
+- [Quick start](#quick-start)
+- [Getting started with the interface](#getting-started-with-the-interface)
+- [API usage](#api-usage)
+- [npm commands](#npm-commands)
+- [Configuration](#configuration)
+- [Manual execution](#manual-execution)
 - [CLI](#cli)
-- [Testes e qualidade](#testes-e-qualidade)
+- [Testing and quality](#testing-and-quality)
 - [Docker](#docker)
-- [Estrutura do repositório](#estrutura-do-repositório)
-- [Dados, artefatos e modelos](#dados-artefatos-e-modelos)
-- [Solução de problemas](#solução-de-problemas)
-- [Segurança e limitações](#segurança-e-limitações)
-- [Documentação técnica](#documentação-técnica)
+- [Repository structure](#repository-structure)
+- [Data, artifacts, and models](#data-artifacts-and-models)
+- [Troubleshooting](#troubleshooting)
+- [Security and limitations](#security-and-limitations)
+- [Technical documentation](#technical-documentation)
 
-## Estado atual
+## Current status
 
-O fluxo local principal, as proteções de recuperação, a infraestrutura determinística de
-benchmark, o smoke test local de QLoRA e a primeira execução baseline versus adapter estão
-implementados.
+The primary local workflow, recovery safeguards, deterministic benchmark infrastructure, local
+QLoRA smoke test, and the first baseline-versus-adapter run are implemented.
 
-O resultado medido até agora é **parcial**. Os dois modelos produziram uma resposta, mas nenhum
-retornou JSON válido dentro do orçamento reduzido do smoke test. Portanto, o experimento ainda não
-demonstra que o fine-tuning melhorou a qualidade. Consulte o
-[relatório do experimento](docs/experiments/0002-baseline-vs-finetuned.md) para ver dados, saídas e
-limitações.
+The result measured so far is **partial**. Both models produced a response, but neither returned
+valid JSON within the smoke test's limited budget. Therefore, the experiment does not yet
+demonstrate that fine-tuning improved quality. See the
+[experiment report](docs/experiments/0002-baseline-vs-finetuned.md) for data, outputs, and
+limitations.
 
-## Funcionalidades
+## Features
 
-- Cadastro e versionamento de cenários arquiteturais.
-- Classificação de cenários e identificação de informações ausentes.
-- Geração de ADRs provisórios ou completos.
-- Acompanhamento de execução em tempo real por Server-Sent Events (SSE).
-- Exportação de ADRs em Markdown.
-- Estratégias fake para desenvolvimento e testes sem GPU ou acesso à rede.
-- Recuperação de contexto por snapshots imutáveis.
-- Comparações cegas com avaliação humana e revelação posterior da proveniência.
-- Experimentos e benchmarks reproduzíveis.
-- Validação e construção de datasets governados.
-- Diagnóstico de recursos locais, armazenamento e integrações.
-- Backup do banco SQLite e manutenção segura de artefatos.
-- Treinamento QLoRA opt-in com proteção de recursos da GPU.
+- Creation and versioning of architectural scenarios.
+- Scenario classification and identification of missing information.
+- Generation of provisional or complete ADRs.
+- Real-time run monitoring through Server-Sent Events (SSE).
+- ADR export to Markdown.
+- Fake strategies for development and testing without a GPU or network access.
+- Context retrieval through immutable snapshots.
+- Blind comparisons with human evaluation and subsequent provenance disclosure.
+- Reproducible experiments and benchmarks.
+- Validation and construction of governed datasets.
+- Diagnostics for local resources, storage, and integrations.
+- SQLite database backups and safe artifact maintenance.
+- Opt-in QLoRA training with GPU resource safeguards.
 
-## Escopo de decisões
+## How the workflow works
 
-O escopo inicial cobre quatro categorias:
+1. The architect describes the problem, known facts, constraints, desired qualities, and candidate
+   alternatives.
+2. ADR Forge creates an immutable scenario revision and classifies its decision categories.
+3. An available strategy analyzes that exact revision. RAG strategies also require a previously
+   persisted retrieval snapshot.
+4. The run publishes progress through SSE and preserves configuration, hashes, telemetry, and raw
+   output.
+5. The output is interpreted and validated against the ADR contract. A single repair attempt may
+   occur when the structure is invalid.
+6. The result ends as a complete ADR, a provisional ADR with up to three clarification questions,
+   invalid output, failure, cancellation, or a recoverable interruption.
+7. The ADR can be reviewed in the interface and exported as JSON or Markdown. Comparisons can hide
+   strategy identities until the human evaluation is submitted.
+
+### Included strategies
+
+| ID                  | Approach                           | Runtime           | Additional requirement                |
+| ------------------- | ---------------------------------- | ----------------- | ------------------------------------- |
+| `fake-baseline`     | Deterministic development baseline | Local fake        | None                                  |
+| `prompted`          | Deterministic structured prompt    | Local fake        | None                                  |
+| `rag`               | Prompt with retrieved context      | Local fake        | Retrieval snapshot                    |
+| `qwen3-4b-baseline` | Qwen without an adapter            | OpenAI-compatible | Configured LM Studio                  |
+| `fine-tuned`        | Qwen with a verified adapter       | Transformers      | ML stack, model, and adapter manifest |
+| `fine-tuned-rag`    | Adapter with retrieved context     | Transformers      | ML stack, adapter, and snapshot       |
+
+The presence of a strategy in the API does not mean it is ready to run. Check
+`GET /api/v1/strategies`: each item reports `available` and, when applicable, the reason it is
+unavailable. A strategy is never silently replaced by another.
+
+## Decision scope
+
+The initial scope covers four categories:
 
 - SQL versus NoSQL;
-- processamento síncrono versus assíncrono;
-- monólito modular versus microsserviços;
-- contêineres versus serverless versus execução tradicional.
+- synchronous versus asynchronous processing;
+- modular monolith versus microservices;
+- containers versus serverless versus traditional execution.
 
-## Arquitetura
+## Architecture
 
 ```mermaid
 flowchart LR
-  U[Arquiteto] --> W[Interface web]
+  U[Architect] --> W[Web interface]
   W --> API[API FastAPI]
-  API --> S[Cenários e validação]
-  S --> R[Runtime de estratégias]
-  R --> L[Modelo local ou LM Studio]
-  R --> K[Knowledge Hub opcional]
+  API --> S[Scenarios and validation]
+  S --> R[Strategy runtime]
+  R --> L[Local model or LM Studio]
+  R --> K[Optional Knowledge Hub]
   S --> D[(SQLite local)]
-  S --> A[Artefatos locais]
-  B[CLI de benchmark] --> R
-  B --> E[Avaliador determinístico]
+  S --> A[Local artifacts]
+  B[Benchmark CLI] --> R
+  B --> E[Deterministic evaluator]
 ```
 
-A aplicação é um monólito modular local. A API concentra os casos de uso; SQLite armazena os
-metadados; resultados maiores são gravados como artefatos; o frontend React consome a API. Modelos,
-GPU e integrações externas são opt-in.
+The application is a local modular monolith. The API hosts the use cases; SQLite stores metadata;
+larger results are written as artifacts; and the React frontend consumes the API. Models, GPU use,
+and external integrations are opt-in.
 
-### Stack principal
+### Main technology stack
 
-- Python 3.12, FastAPI, SQLAlchemy assíncrono, Alembic, Pydantic e Typer;
-- React 18, TypeScript, Vite, TanStack Query e Vitest;
-- SQLite para metadados locais;
-- PyTorch, Transformers, PEFT e TRL como dependências opcionais de ML;
-- Docker Compose para builds locais reproduzíveis.
+- Python 3.12, FastAPI, asynchronous SQLAlchemy, Alembic, Pydantic, and Typer;
+- React 18, TypeScript, Vite, TanStack Query, and Vitest;
+- SQLite for local metadata;
+- PyTorch, Transformers, PEFT, and TRL as optional ML dependencies;
+- Docker Compose for reproducible local builds.
 
-## Início rápido
+## Quick start
 
-### Pré-requisitos
+### Prerequisites
 
 - Python `>=3.12,<3.13`;
 - [uv](https://docs.astral.sh/uv/);
-- Node.js `>=22.12.0` e npm;
+- Node.js `>=22.12.0` and npm;
 - Git;
-- Docker com Compose apenas para o fluxo opcional de contêineres.
+- Docker with Compose, only for the optional container workflow.
 
-GPU, modelo local e Knowledge Hub **não são necessários** para executar os testes CPU-safe nem os
-fluxos que usam estratégias fake.
+A GPU, local model, and Knowledge Hub are **not required** to run CPU-safe tests or workflows that
+use fake strategies.
 
-### 1. Configure o ambiente
+### 1. Configure the environment
 
-Na raiz do repositório:
+From the repository root:
 
 ```bash
 cp .env.example .env
 ```
 
-O arquivo criado contém valores locais seguros. Preencha tokens apenas se for utilizar a integração
-correspondente. Nunca faça commit do `.env`.
+The resulting file contains safe local values. Only add tokens when using the corresponding
+integration. Never commit `.env`.
 
-### 2. Instale as dependências e prepare o banco
+### 2. Install dependencies and prepare the database
 
 ```bash
 npm run setup
 ```
 
-Esse comando:
+This command:
 
-1. instala as dependências Python de desenvolvimento com `uv`;
-2. instala o orquestrador npm da raiz;
-3. instala as dependências do frontend;
-4. aplica as migrações do Alembic.
+1. installs Python development dependencies with `uv`;
+2. installs the root npm orchestrator;
+3. installs frontend dependencies;
+4. applies Alembic migrations.
 
-### 3. Inicie a aplicação
+### 3. Start the application
 
 ```bash
 npm run dev
 ```
 
-O comando inicia API e frontend juntos. Pressione `Ctrl+C` para encerrar ambos.
+The command starts the API and frontend together. Press `Ctrl+C` to stop both.
 
-### 4. Acesse os serviços
+### 4. Access the services
 
-| Serviço | URL |
-|---|---|
-| Aplicação web | <http://127.0.0.1:5173> |
-| API | <http://127.0.0.1:8000> |
-| Swagger UI | <http://127.0.0.1:8000/docs> |
-| ReDoc | <http://127.0.0.1:8000/redoc> |
-| OpenAPI JSON | <http://127.0.0.1:8000/openapi.json> |
-| Health check | <http://127.0.0.1:8000/api/v1/health> |
-| Readiness | <http://127.0.0.1:8000/api/v1/readiness> |
+| Service      | URL                                      |
+| ------------ | ---------------------------------------- |
+| Web app      | <http://127.0.0.1:5173>                  |
+| API          | <http://127.0.0.1:8000>                  |
+| Swagger UI   | <http://127.0.0.1:8000/docs>             |
+| ReDoc        | <http://127.0.0.1:8000/redoc>            |
+| OpenAPI JSON | <http://127.0.0.1:8000/openapi.json>     |
+| Health check | <http://127.0.0.1:8000/api/v1/health>    |
+| Readiness    | <http://127.0.0.1:8000/api/v1/readiness> |
 
-Para verificar rapidamente a API:
+To quickly verify the API:
 
 ```bash
 curl --fail http://127.0.0.1:8000/api/v1/health
 ```
 
-Resposta esperada:
+Expected response:
 
 ```json
-{"status":"ok"}
+{ "status": "ok" }
 ```
 
-## Comandos npm
+## Getting started with the interface
 
-Execute os comandos abaixo na raiz do repositório.
+1. Open **Testar IA** (Test AI) and select an available strategy.
+2. Complete the scenario or use one of the SQL/NoSQL, monolith/microservices,
+   synchronous/asynchronous, or containers/serverless examples.
+3. Separate observed facts from constraints. The more measurable the latency, cost, deadline,
+   volume, availability, and team-capacity limits are, the more auditable the ADR will be.
+4. Start the analysis and monitor its stage and completion percentage.
+5. Review assumptions, alternatives, consequences, risks, confidence, and review triggers before
+   exporting. A generated recommendation is not an approved decision.
 
-| Comando | Descrição |
-|---|---|
-| `npm run setup` | Instala dependências Python/Node e aplica as migrações. |
-| `npm run migrate` | Atualiza o banco local até a última migração. |
-| `npm run dev` | Inicia API e frontend juntos, com recarga automática. |
-| `npm run api` | Inicia somente a API em `127.0.0.1:8000`. |
-| `npm run web` | Inicia somente o frontend em `127.0.0.1:5173`. |
-| `npm run build` | Valida o TypeScript e gera o build do frontend. |
-| `npm test` | Executa testes Python CPU-safe e testes do frontend. |
-| `npm run docker:build` | Constrói as imagens locais. |
-| `npm run docker:up` | Inicia o Compose local. Consulte as limitações de Docker abaixo. |
-| `npm run docker:down` | Encerra e remove os contêineres do Compose. |
+The **Treinamento** (Training) and **Base de dados** (Database) areas show the local status of their
+respective artifacts; advanced, reproducible operations remain available through the CLI.
 
-Para listar os scripts:
+## API usage
+
+The versioned API uses the `/api/v1` prefix, returns errors as `application/problem+json`, and
+includes `X-Request-ID` in responses. The complete contract and payload schemas are available in
+Swagger and the versioned OpenAPI file.
+
+CPU-safe example using the fake strategy:
+
+```bash
+scenario_json="$(curl --fail-with-body --silent --show-error \
+  http://127.0.0.1:8000/api/v1/scenarios \
+  -H 'Content-Type: application/json' \
+  --data '{
+    "title": "Persistência para pagamentos",
+    "language": "pt-BR",
+    "problem": "Escolher a persistência do serviço de pagamentos e conciliação.",
+    "facts": ["A equipe opera PostgreSQL", "Há exigência de auditoria"],
+    "constraints": ["A entrega deve ocorrer em oito semanas"],
+    "desired_qualities": ["consistência", "rastreabilidade"],
+    "candidate_alternatives": ["PostgreSQL", "banco de documentos"]
+  }')"
+
+revision_id="$(printf '%s' "$scenario_json" | python3 -c \
+  'import json,sys; print(json.load(sys.stdin)["current_revision"]["id"])')"
+
+curl --fail-with-body http://127.0.0.1:8000/api/v1/analysis-runs \
+  -H 'Content-Type: application/json' \
+  --data "{\"scenario_revision_id\":\"$revision_id\",\"strategy_id\":\"fake-baseline\",\"strategy_version\":\"1\"}"
+```
+
+The `id` returned by the second call can be queried at `GET /api/v1/analysis-runs/{runId}`. Live
+progress is available at `GET /api/v1/analysis-runs/{runId}/events`; the persisted run state remains
+the source of truth after reconnection. Use Swagger at `/docs` to explore the complete API surface.
+
+## npm commands
+
+Run the commands below from the repository root.
+
+| Command                | Description                                                 |
+| ---------------------- | ----------------------------------------------------------- |
+| `npm run setup`        | Installs Python/Node dependencies and applies migrations.   |
+| `npm run migrate`      | Updates the local database to the latest migration.         |
+| `npm run dev`          | Starts the API and frontend together with automatic reload. |
+| `npm run api`          | Starts only the API at `127.0.0.1:8000`.                    |
+| `npm run web`          | Starts only the frontend at `127.0.0.1:5173`.               |
+| `npm run build`        | Validates TypeScript and creates the frontend build.        |
+| `npm test`             | Runs CPU-safe Python tests and frontend tests.              |
+| `npm run docker:build` | Builds the local images.                                    |
+| `npm run docker:up`    | Starts local Compose. See the Docker limitations below.     |
+| `npm run docker:down`  | Stops and removes the Compose containers.                   |
+
+To list the scripts:
 
 ```bash
 npm run
 ```
 
-Se preferir um seletor interativo, use `npx ntl`. Esse comando pode baixar o pacote `ntl` na
-primeira execução.
+For an interactive selector, use `npx ntl`. This command may download the `ntl` package the first
+time it runs.
 
-## Configuração
+## Configuration
 
-A API lê o `.env` localizado na raiz. Os caminhos relativos também são resolvidos a partir da raiz.
+The API reads `.env` from the repository root. Relative paths are also resolved from the root.
 
-| Variável | Padrão | Finalidade |
-|---|---|---|
-| `ADR_FORGE_HOST` | `127.0.0.1` | Host da API; somente loopback é aceito. |
-| `ADR_FORGE_PORT` | `8000` | Porta da API. |
-| `ADR_FORGE_WEB_HOST` | `127.0.0.1` | Host autorizado pelo CORS. |
-| `ADR_FORGE_WEB_PORT` | `5173` | Porta do frontend autorizada pelo CORS. |
-| `ADR_FORGE_DATABASE_URL` | `sqlite+aiosqlite:///./data/adr-forge.sqlite3` | Banco SQLite local. |
-| `ADR_FORGE_ARTIFACT_ROOT` | `./data/artifacts` | Diretório de artefatos. |
-| `ADR_FORGE_ARTIFACT_WARNING_BYTES` | `42949672960` | Alerta de uso em 40 GiB. |
-| `ADR_FORGE_ARTIFACT_LIMIT_BYTES` | `53687091200` | Limite máximo de 50 GiB. |
-| `KNOWLEDGE_HUB_BASE_URL` | `http://127.0.0.1:8001` | Endpoint local do Knowledge Hub. |
-| `KNOWLEDGE_HUB_TOKEN` | vazio | Bearer token opcional do Knowledge Hub. |
-| `HF_TOKEN` | vazio | Token opcional do Hugging Face. |
-| `HF_HOME` | `./data/huggingface` | Cache local de modelos. |
-| `ADR_FORGE_MODEL_ID` | `Qwen/Qwen3-4B-Instruct-2507` | Modelo configurado. |
-| `ADR_FORGE_MODEL_REVISION` | revisão fixada no exemplo | Commit imutável do modelo. |
-| `ADR_FORGE_MODEL_TRUST_REMOTE_CODE` | `false` | Deve permanecer `false`. |
-| `ADR_FORGE_LM_STUDIO_BASE_URL` | não definido | Endpoint OpenAI-compatible opcional. |
-| `ADR_FORGE_LM_STUDIO_MODEL_ID` | não definido | Identidade do modelo carregado no LM Studio. |
-| `ADR_FORGE_LM_STUDIO_API_KEY` | vazio | Chave opcional do runtime local. |
-| `ADR_FORGE_LM_STUDIO_TIMEOUT_SECONDS` | `120` | Timeout entre 1 e 300 segundos. |
+| Variable                                     | Default                                                   | Purpose                                    |
+| -------------------------------------------- | --------------------------------------------------------- | ------------------------------------------ |
+| `ADR_FORGE_HOST`                             | `127.0.0.1`                                               | API host; only loopback is accepted.       |
+| `ADR_FORGE_PORT`                             | `8000`                                                    | API port.                                  |
+| `ADR_FORGE_WEB_HOST`                         | `127.0.0.1`                                               | Host allowed by CORS.                      |
+| `ADR_FORGE_WEB_PORT`                         | `5173`                                                    | Frontend port allowed by CORS.             |
+| `ADR_FORGE_DATABASE_URL`                     | `sqlite+aiosqlite:///./data/adr-forge.sqlite3`            | Local SQLite database.                     |
+| `ADR_FORGE_ARTIFACT_ROOT`                    | `./data/artifacts`                                        | Artifact directory.                        |
+| `ADR_FORGE_ARTIFACT_WARNING_BYTES`           | `42949672960`                                             | Usage warning at 40 GiB.                   |
+| `ADR_FORGE_ARTIFACT_LIMIT_BYTES`             | `53687091200`                                             | Maximum limit of 50 GiB.                   |
+| `ADR_FORGE_ARTIFACT_FREE_DISK_RESERVE_BYTES` | `5368709120`                                              | Minimum reserve of 5 GiB free.             |
+| `ADR_FORGE_DATASET_MANIFEST_PATH`            | `./datasets/manifests/v0.4.0-adr-dialogue.json`           | Manifest displayed as the current dataset. |
+| `ADR_FORGE_DATASET_TRAINING_PATH`            | `./data/datasets/v0.4.0-adr-dialogue/training.jsonl`      | Locally built training dataset.            |
+| `KNOWLEDGE_HUB_BASE_URL`                     | `http://127.0.0.1:8001`                                   | Local Knowledge Hub endpoint.              |
+| `KNOWLEDGE_HUB_TOKEN`                        | empty                                                     | Optional Knowledge Hub bearer token.       |
+| `HF_TOKEN`                                   | empty                                                     | Optional Hugging Face token.               |
+| `HF_HOME`                                    | `./data/huggingface`                                      | Local model cache.                         |
+| `ADR_FORGE_MODEL_ID`                         | `Qwen/Qwen3-4B-Instruct-2507`                             | Configured model.                          |
+| `ADR_FORGE_MODEL_REVISION`                   | revision pinned in the example                            | Immutable model commit.                    |
+| `ADR_FORGE_MODEL_TRUST_REMOTE_CODE`          | `false`                                                   | Must remain `false`.                       |
+| `ADR_FORGE_ADAPTER_MANIFEST_PATH`            | `./data/training/qwen3-4b-adr-json/adapter-manifest.json` | Local fine-tuned adapter manifest.         |
+| `ADR_FORGE_LM_STUDIO_BASE_URL`               | not set                                                   | Optional OpenAI-compatible endpoint.       |
+| `ADR_FORGE_LM_STUDIO_MODEL_ID`               | not set                                                   | Identity of the model loaded in LM Studio. |
+| `ADR_FORGE_LM_STUDIO_API_KEY`                | empty                                                     | Optional local runtime key.                |
+| `ADR_FORGE_LM_STUDIO_TIMEOUT_SECONDS`        | `120`                                                     | Timeout between 1 and 300 seconds.         |
 
-Regras de validação relevantes:
+Relevant validation rules:
 
-- hosts da API e do frontend devem ser loopback (`127.0.0.1`, `localhost` ou equivalente);
-- o limite de artefatos não pode ultrapassar 50 GiB;
-- o limiar de alerta deve ser menor que o limite;
-- `trust_remote_code` deve permanecer desabilitado;
-- URL e ID do modelo do LM Studio devem ser configurados juntos;
-- o readiness exige o diretório de artefatos acessível e pelo menos 5 GiB livres.
+- API and frontend hosts must be loopback addresses (`127.0.0.1`, `localhost`, or equivalent);
+- the artifact limit cannot exceed 50 GiB;
+- the warning threshold must be lower than the limit;
+- `trust_remote_code` must remain disabled;
+- the LM Studio URL and model ID must be configured together;
+- readiness requires an accessible artifact directory and at least 5 GiB of free space.
 
-### Frontend e URL da API
+### Frontend and API URL
 
-O frontend usa `VITE_API_BASE_URL`. O atalho `npm run dev` já configura:
+The frontend uses `VITE_API_BASE_URL`. The `npm run dev` shortcut already configures:
 
 ```text
 http://127.0.0.1:8000/api/v1
 ```
 
-Ao iniciar o frontend diretamente dentro de `apps/web`, defina a variável manualmente:
+When starting the frontend directly from `apps/web`, set the variable manually:
 
 ```bash
 VITE_API_BASE_URL=http://127.0.0.1:8000/api/v1 npm --prefix apps/web run dev
 ```
 
-## Execução manual
+## Manual execution
 
-Se quiser controlar cada processo separadamente, primeiro aplique as migrações:
+To control each process separately, apply the migrations first:
 
 ```bash
 uv run alembic upgrade head
@@ -262,23 +346,23 @@ VITE_API_BASE_URL=http://127.0.0.1:8000/api/v1 npm --prefix apps/web run dev
 
 ## CLI
 
-O executável `adr-forge` é instalado no ambiente criado pelo `uv`. Consulte a ajuda geral ou de um
-subcomando antes de operações avançadas:
+The `adr-forge` executable is installed in the environment created by `uv`. Review the general or
+subcommand help before advanced operations:
 
 ```bash
 uv run adr-forge --help
 uv run adr-forge doctor --help
 ```
 
-### Diagnóstico
+### Diagnostics
 
 ```bash
 uv run adr-forge doctor
 uv run adr-forge doctor --json
 ```
 
-O diagnóstico inspeciona armazenamento, SQLite, CUDA/VRAM, processos de GPU, modelo e integrações
-sem baixar modelos ou alterar o sistema.
+The diagnostic command inspects storage, SQLite, CUDA/VRAM, GPU processes, the model, and
+integrations without downloading models or modifying the system.
 
 ### Dataset
 
@@ -296,9 +380,9 @@ uv run adr-forge benchmark run --config configs/evaluation/smoke.yaml
 uv run adr-forge benchmark report --experiment <UUID> --output data/reports/report.md
 ```
 
-Use `--help` para confirmar os arquivos de configuração disponíveis e as opções de retomada.
+Use `--help` to confirm the available configuration files and resume options.
 
-### Treinamento opt-in
+### Opt-in training
 
 ```bash
 uv sync --frozen --extra dev --extra ml
@@ -308,8 +392,8 @@ uv run adr-forge dataset build \
 uv run adr-forge train sft --config configs/training/qwen3-4b-adr-contract-v3.yaml
 ```
 
-O dataset recomendado para treinamento conversacional é a versão `v0.4.0`, que inclui ADRs
-propostos, ADRs provisórios e continuidades de esclarecimento validadas pelo contrato de domínio:
+The recommended dataset for conversational training is version `v0.4.0`, which includes proposed
+ADRs, provisional ADRs, and clarification continuations validated by the domain contract:
 
 ```bash
 uv run adr-forge dataset validate \
@@ -320,14 +404,14 @@ uv run adr-forge dataset build \
 uv run adr-forge train sft --config configs/training/qwen3-4b-adr-dialogue-v4.yaml
 ```
 
-O treinamento requer o stack opcional de ML, modelo disponível e GPU compatível. O smoke test não é
-um dataset de qualidade para treinamento; ele existe apenas para validar o pipeline.
+Training requires the optional ML stack, an available model, and a compatible GPU. The smoke test
+is not a quality training dataset; it exists solely to validate the pipeline.
 
-O perfil `qwen3-4b-adr-contract-v3` treina um único contrato JSON em `snake_case` para o ADR,
-incluindo perguntas provisórias em `unresolved_questions`. O validador permanece estrito: saídas
-fora do contrato são rejeitadas e devem ser corrigidas no dataset, não adaptadas na API.
+The `qwen3-4b-adr-contract-v3` profile trains a single `snake_case` JSON contract for the ADR,
+including provisional questions in `unresolved_questions`. Validation remains strict: outputs that
+violate the contract are rejected and must be corrected in the dataset, not adapted in the API.
 
-### Banco e artefatos
+### Database and artifacts
 
 ```bash
 uv run adr-forge database backup --output data/backups/adr-forge.sqlite3
@@ -336,19 +420,19 @@ uv run adr-forge artifacts prune
 uv run adr-forge artifacts prune --confirm
 ```
 
-O backup não sobrescreve silenciosamente um destino existente. A remoção de artefatos exige
-`--confirm` e considera apenas itens elegíveis e sem referência ativa.
+The backup does not silently overwrite an existing destination. Artifact removal requires
+`--confirm` and considers only eligible items without active references.
 
-## Testes e qualidade
+## Testing and quality
 
-O atalho rápido executa testes Python que não usam GPU nem integrações ao vivo e, em seguida, os
-testes do frontend:
+The quick shortcut runs Python tests that do not use a GPU or live integrations, followed by the
+frontend tests:
 
 ```bash
 npm test
 ```
 
-Os quality gates completos usados pelo projeto são:
+The project's complete quality gates are:
 
 ```bash
 uv run ruff format --check .
@@ -360,179 +444,191 @@ npm --prefix apps/web run lint
 npm --prefix apps/web run format:check
 npm --prefix apps/web test
 npm --prefix apps/web run build
+npm --prefix apps/web run test:e2e
 ```
 
-Os testes marcados como `gpu` ou `live_integration` são deliberadamente opt-in:
+The Python gate can be reproduced with `scripts/verify-python-ci.sh`. CI automation also checks
+dataset fixture integrity, secret leakage, Python dependencies, and npm dependencies. Review the
+versioned workflows before reproducing checks that may query external vulnerability databases.
+
+The current Playwright test is a smoke test of the interface shell: it starts Vite automatically
+but does not cover an integrated API workflow. It requires an installed browser. To install
+Chromium locally:
+
+```bash
+npm --prefix apps/web exec playwright install chromium
+```
+
+Tests marked `gpu` or `live_integration` are deliberately opt-in:
 
 ```bash
 uv run pytest -m gpu
 uv run pytest -m live_integration
 ```
 
-Não execute esses grupos sem preparar explicitamente o hardware, o modelo ou a integração.
+Do not run these groups without explicitly preparing the hardware, model, or integration.
 
 ## Docker
 
-Para construir as imagens CPU-safe:
+To build the CPU-safe images:
 
 ```bash
 npm run docker:build
 ```
 
-Para iniciar e encerrar o Compose:
+To start and stop Compose:
 
 ```bash
 npm run docker:up
 npm run docker:down
 ```
 
-O Compose publica apenas:
+Compose exposes only:
 
-- `127.0.0.1:8000` para a API;
-- `127.0.0.1:5173` para o frontend.
+- `127.0.0.1:8000` for the API;
+- `127.0.0.1:5173` for the frontend.
 
-O banco e os artefatos da API são mantidos em `./data`, montado em `/app/data` no contêiner, e
-CUDA permanece desabilitada no contêiner.
+The database and API artifacts are stored in `./data`, mounted at `/app/data` in the container, and
+CUDA remains disabled in the container.
 
 > [!WARNING]
-> O Compose atual é voltado à construção e reprodutibilidade das imagens. Ele ainda não executa as
-> migrações Alembic automaticamente e a imagem web não possui proxy `/api/v1` para a API. Portanto,
-> prefira `npm run dev` para validar o fluxo end-to-end local.
+> The current Compose setup is intended for image building and reproducibility. It does not yet run
+> Alembic migrations automatically, and the web image has no `/api/v1` proxy to the API. Therefore,
+> prefer `npm run dev` when validating the local end-to-end workflow.
 
-Esses contêineres são exclusivamente locais. Eles não devem ser usados para iniciar, parar,
-recriar, diagnosticar ou implantar serviços de produção.
+These containers are exclusively local. They must not be used to start, stop, recreate, diagnose,
+or deploy production services.
 
-## Estrutura do repositório
+## Repository structure
 
 ```text
 adr-forge/
-├── alembic/                 # Migrações do banco
+├── alembic/                 # Database migrations
 ├── apps/
-│   ├── api/                 # Composition root da API FastAPI
-│   └── web/                 # Aplicação React/Vite
-├── configs/                 # Configurações de modelos, treino e avaliação
-├── datasets/                # Fixtures, manifests, schemas e dados públicos governados
+│   ├── api/                 # FastAPI composition root
+│   └── web/                 # React/Vite application
+├── configs/                 # Model, training, and evaluation configuration
+├── datasets/                # Fixtures, manifests, schemas, and governed public data
 ├── docs/
-│   ├── adrs/                # Decisões arquiteturais aceitas
-│   ├── architecture/        # Blueprint e quality gates
-│   └── experiments/         # Relatórios e evidências experimentais
-├── specs/                   # Especificação, plano, contratos e tarefas
-├── src/adr_forge/           # Domínio, casos de uso, adaptadores e CLI
-├── tests/                   # Testes unitários, integração, contrato e segurança
-├── data/                    # Estado local gerado e ignorado pelo Git
-├── .env.example             # Modelo de configuração local
-├── compose.yaml             # Serviços locais CPU-safe
-├── package.json             # Atalhos de desenvolvimento da raiz
-└── pyproject.toml           # Pacote e ferramentas Python
+│   ├── adrs/                # Accepted architectural decisions
+│   ├── architecture/        # Blueprint and quality gates
+│   └── experiments/         # Experimental reports and evidence
+├── specs/                   # Specification, plan, contracts, and tasks
+├── src/adr_forge/           # Domain, use cases, adapters, and CLI
+├── tests/                   # Unit, integration, contract, and security tests
+├── data/                    # Generated local state ignored by Git
+├── .env.example             # Local configuration template
+├── compose.yaml             # Local CPU-safe services
+├── package.json             # Root development shortcuts
+└── pyproject.toml           # Python package and tooling
 ```
 
-## Dados, artefatos e modelos
+## Data, artifacts, and models
 
-- Metadados locais ficam em `data/adr-forge.sqlite3` por padrão.
-- Saídas, snapshots e evidências ficam em `data/artifacts`.
-- O cache do Hugging Face fica em `data/huggingface`.
-- Dados de treinamento são versionados e governados separadamente dos cenários fixos de avaliação.
-- Execuções preservam cenário, estratégia, configuração, saída bruta, telemetria e achados de
-  validação.
-- Snapshots de recuperação são persistidos para impedir que uma repetição consulte silenciosamente
-  conteúdo diferente.
-- `.env`, tokens, bancos, modelos, snapshots e artefatos não devem ser versionados.
+- Local metadata is stored in `data/adr-forge.sqlite3` by default.
+- Outputs, snapshots, and evidence are stored in `data/artifacts`.
+- The Hugging Face cache is stored in `data/huggingface`.
+- Training data is versioned and governed separately from fixed evaluation scenarios.
+- Runs preserve the scenario, strategy, configuration, raw output, telemetry, and validation
+  findings.
+- Retrieval snapshots are persisted to prevent a repeated run from silently querying different
+  content.
+- `.env`, tokens, databases, models, snapshots, and artifacts must not be versioned.
 
-## Solução de problemas
+## Troubleshooting
 
-### `npm run dev` não encontra `concurrently`
+### `npm run dev` cannot find `concurrently`
 
-Instale as dependências da raiz:
+Install the root dependencies:
 
 ```bash
 npm ci
 ```
 
-Ou refaça a preparação completa:
+Or repeat the complete setup:
 
 ```bash
 npm run setup
 ```
 
-### A API informa que uma tabela não existe
+### The API reports that a table does not exist
 
-As migrações provavelmente não foram aplicadas:
+The migrations probably have not been applied:
 
 ```bash
 npm run migrate
 ```
 
-### A interface abre, mas as chamadas `/api/v1` falham
+### The interface opens, but `/api/v1` calls fail
 
-Use o atalho da raiz, que configura a URL da API:
+Use the root shortcut, which configures the API URL:
 
 ```bash
 npm run dev
 ```
 
-Se estiver iniciando o Vite manualmente, defina `VITE_API_BASE_URL` conforme mostrado na seção de
-configuração.
+If starting Vite manually, set `VITE_API_BASE_URL` as shown in the configuration section.
 
-### A porta 8000 ou 5173 já está ocupada
+### Port 8000 or 5173 is already in use
 
-Descubra o processo que está usando a porta e encerre-o conscientemente. Se alterar as portas,
-atualize em conjunto `ADR_FORGE_PORT`, `ADR_FORGE_WEB_PORT`, o comando do Vite e
-`VITE_API_BASE_URL`; o CORS depende desses valores.
+Identify the process using the port and terminate it intentionally. If you change the ports, update
+`ADR_FORGE_PORT`, `ADR_FORGE_WEB_PORT`, the Vite command, and `VITE_API_BASE_URL` together; CORS
+depends on these values.
 
-### O readiness retorna HTTP 503
+### Readiness returns HTTP 503
 
-Verifique:
+Check:
 
 ```bash
 uv run adr-forge doctor
 ```
 
-O diretório de artefatos precisa ser gravável e o disco deve manter a reserva mínima configurada
-de 5 GiB.
+The artifact directory must be writable, and the disk must retain the configured minimum reserve
+of 5 GiB.
 
-### Knowledge Hub aparece como não configurado
+### Knowledge Hub appears as not configured
 
-Defina `KNOWLEDGE_HUB_TOKEN` no `.env`. O uso dessa integração é opcional; os fluxos fake continuam
-disponíveis sem ela.
+Set `KNOWLEDGE_HUB_TOKEN` in `.env`. This integration is optional; fake workflows remain available
+without it.
 
-### Problemas com GPU ou memória de vídeo
+### GPU or video-memory issues
 
-Remova modelos concorrentes da GPU, confira o diagnóstico e execute somente o teste específico:
+Remove competing models from the GPU, review the diagnostics, and run only the specific test:
 
 ```bash
 uv run adr-forge doctor
-uv run pytest -m gpu tests/integration/test_qwen_baseline.py
+uv run pytest -m gpu tests/integration/test_qwen_qlora_smoke.py
 ```
 
-Não inclua os testes de GPU na rotina CPU-safe.
+Do not include GPU tests in the CPU-safe routine.
 
-## Segurança e limitações
+## Security and limitations
 
-- A aplicação não oferece autenticação nem TLS.
-- API e frontend devem permanecer em loopback.
-- Tokens são tratados como segredos e não devem aparecer em logs, artefatos ou commits.
-- Modelos e integrações externas são opt-in.
-- `trust_remote_code` é proibido pela configuração.
-- Treino e benchmark usam uma concessão exclusiva da GPU local.
-- Validações automáticas verificam estrutura e rastreabilidade; não substituem revisão humana.
-- O primeiro experimento não sustenta uma alegação de ganho de qualidade do adapter.
-- Uma conclusão científica exige conjunto retido maior, saídas estruturadas válidas e avaliação
-  humana cega.
+- The application provides neither authentication nor TLS.
+- The API and frontend must remain on loopback addresses.
+- Tokens are treated as secrets and must not appear in logs, artifacts, or commits.
+- Models and external integrations are opt-in.
+- Configuration prohibits `trust_remote_code`.
+- Training and benchmarking use an exclusive lease on the local GPU.
+- Automated validation checks structure and traceability; it does not replace human review.
+- The first experiment does not support a claim that the adapter improved quality.
+- A scientific conclusion requires a larger held-out set, valid structured outputs, and blind human
+  evaluation.
 
-## Documentação técnica
+## Technical documentation
 
-- [Especificação do produto](specs/001-architecture-decision-lab/spec.md)
-- [Plano técnico](specs/001-architecture-decision-lab/plan.md)
-- [Modelo de dados](specs/001-architecture-decision-lab/data-model.md)
-- [Quickstart de validação](specs/001-architecture-decision-lab/quickstart.md)
-- [Contrato OpenAPI](specs/001-architecture-decision-lab/contracts/api.openapi.yaml)
-- [Contrato da CLI](specs/001-architecture-decision-lab/contracts/cli.md)
-- [Integração com Knowledge Hub](specs/001-architecture-decision-lab/contracts/knowledge-hub.md)
-- [Blueprint de arquitetura](docs/architecture/blueprint.md)
+- [Product specification](specs/001-architecture-decision-lab/spec.md)
+- [Technical plan](specs/001-architecture-decision-lab/plan.md)
+- [Data model](specs/001-architecture-decision-lab/data-model.md)
+- [Validation quick start](specs/001-architecture-decision-lab/quickstart.md)
+- [OpenAPI contract](specs/001-architecture-decision-lab/contracts/api.openapi.yaml)
+- [CLI contract](specs/001-architecture-decision-lab/contracts/cli.md)
+- [Knowledge Hub integration](specs/001-architecture-decision-lab/contracts/knowledge-hub.md)
+- [Architecture blueprint](docs/architecture/blueprint.md)
 - [Quality gates](docs/architecture/quality-gates.md)
-- [ADRs aceitos](docs/adrs/README.md)
-- [Relatório do smoke test local](docs/experiments/0001-local-smoke.md)
-- [Comparação baseline versus fine-tuned](docs/experiments/0002-baseline-vs-finetuned.md)
+- [Accepted ADRs](docs/adrs/README.md)
+- [Local smoke-test report](docs/experiments/0001-local-smoke.md)
+- [Baseline versus fine-tuned comparison](docs/experiments/0002-baseline-vs-finetuned.md)
 
-O desenvolvimento segue os artefatos versionados de especificação, planejamento e tarefas. Uma
-tarefa só deve ser marcada como concluída depois que suas validações relevantes passarem.
+Development follows the versioned specification, planning, and task artifacts. A task should only
+be marked complete after its relevant validations pass.
