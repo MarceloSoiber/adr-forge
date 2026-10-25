@@ -81,9 +81,10 @@ def test_v2_incomplete_case_teaches_new_question_after_clarification() -> None:
     second = json.loads(str(rows[1]["completion"]))
 
     assert len(rows) == 2
-    assert first["unresolved_questions"][0]["question"] != second["unresolved_questions"][0][
-        "question"
-    ]
+    assert (
+        first["unresolved_questions"][0]["question"]
+        != second["unresolved_questions"][0]["question"]
+    )
     assert "Esclarecimentos já respondidos" in str(rows[1]["prompt"])
     for target in (first, second):
         draft = ADRDraft.model_validate({**target, "analysis_run_id": str(uuid4())})
@@ -91,9 +92,7 @@ def test_v2_incomplete_case_teaches_new_question_after_clarification() -> None:
 
 
 def test_v040_manifest_is_governed_and_uses_dialogue_format() -> None:
-    validation = load_and_validate_manifest(
-        Path("datasets/manifests/v0.4.0-adr-dialogue.json")
-    )
+    validation = load_and_validate_manifest(Path("datasets/manifests/v0.4.0-adr-dialogue.json"))
 
     assert validation.valid
     assert validation.output_format == "adr-json-v2"

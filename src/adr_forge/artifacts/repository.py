@@ -135,7 +135,8 @@ class ArtifactRepository:
             row = (
                 await session.execute(
                     text(
-                        """SELECT a.id, a.kind, a.relative_path, a.sha256, a.size_bytes, a.retention,
+                        """SELECT a.id, a.kind, a.relative_path, a.sha256, a.size_bytes,
+                        a.retention,
                         a.created_at, COUNT(r.artifact_id) AS reference_count
                         FROM artifacts a LEFT JOIN artifact_references r ON r.artifact_id = a.id
                         WHERE a.id = :id AND a.kind = 'raw_output' GROUP BY a.id"""

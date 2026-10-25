@@ -72,13 +72,21 @@ describe('ScenarioForm', () => {
       />,
     )
 
-    await userEvent.setup().click(
-      screen.getByRole('button', { name: 'Containers ou serverless' }),
-    )
+    await userEvent
+      .setup()
+      .click(screen.getByRole('button', { name: 'Containers ou serverless' }))
 
-    expect(onTitleChange).toHaveBeenCalledWith('Execução de conciliação financeira')
-    expect(onProblemChange).toHaveBeenCalledWith(expect.stringContaining('máquinas virtuais'))
-    expect(onFactsChange).toHaveBeenCalledWith(expect.stringContaining('8 milhões'))
-    expect(onConstraintsChange).toHaveBeenCalledWith(expect.stringContaining('R$ 12 mil'))
+    expect(onTitleChange).toHaveBeenCalledWith(
+      'Execução de conciliação financeira',
+    )
+    expect(onProblemChange).toHaveBeenCalledWith(
+      expect.stringContaining('máquinas virtuais'),
+    )
+    expect(onFactsChange).toHaveBeenCalledWith(
+      expect.stringContaining('8 milhões'),
+    )
+    expect(onConstraintsChange).toHaveBeenCalledWith(
+      expect.stringContaining('R$ 12 mil'),
+    )
   })
 })

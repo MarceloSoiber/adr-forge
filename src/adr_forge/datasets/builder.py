@@ -302,9 +302,7 @@ def _structured_training_rows_v2(example: DatasetExample) -> list[dict[str, obje
     return [first, second]
 
 
-def _proposed_target(
-    example: DatasetExample, alternatives: tuple[str, str]
-) -> dict[str, object]:
+def _proposed_target(example: DatasetExample, alternatives: tuple[str, str]) -> dict[str, object]:
     return {
         "schema_version": "adr-v1",
         "title": f"Decisão para {example.categories[0].value.replace('_', ' ')}",

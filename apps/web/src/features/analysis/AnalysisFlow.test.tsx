@@ -448,5 +448,4 @@ describe('AnalysisFlow', () => {
       ),
     ).toBe(false)
   })
-
 })

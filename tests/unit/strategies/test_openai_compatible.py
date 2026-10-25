@@ -103,4 +103,4 @@ async def test_openai_compatible_runtime_sends_raw_output_and_findings_for_one_r
     content = route.calls[0].request.content.decode()
     assert "unresolved_questions.required" in content
     assert "nunca retorne unresolved_questions vazio" in content
-    assert '"id\\\":\\\"pergunta-1\\\"' in content
+    assert '"id\\":\\"pergunta-1\\"' in content

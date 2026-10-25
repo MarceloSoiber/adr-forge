@@ -53,15 +53,12 @@ class FakeStrategy(StructuredOutputStrategy):
                 }
             ]
         context_findings = classify_context(scenario)
-        answered_question_ids = {
-            answer.question_id for answer in scenario.clarification_answers
-        }
+        answered_question_ids = {answer.question_id for answer in scenario.clarification_answers}
         needs_clarification = (
             (not scenario.facts and "context-scale" not in answered_question_ids)
             or (not scenario.constraints and "context-constraints" not in answered_question_ids)
             or any(
-                finding.code == "context.contradictory_constraints"
-                for finding in context_findings
+                finding.code == "context.contradictory_constraints" for finding in context_findings
             )
         )
         if needs_clarification and not assumptions:

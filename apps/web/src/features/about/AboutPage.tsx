@@ -22,11 +22,13 @@ export function AboutPage() {
       <section className="about-hero" aria-labelledby="about-title">
         <div>
           <p className="section-kicker">Sobre o projeto · ADR Forge</p>
-          <h1 id="about-title">Um laboratório para pensar melhor sobre software.</h1>
+          <h1 id="about-title">
+            Um laboratório para pensar melhor sobre software.
+          </h1>
           <p className="about-lede">
-            O ADR Forge é um ambiente local para explorar decisões de arquitetura
-            com inteligência artificial, registrar o raciocínio e transformar cada
-            tentativa em aprendizado reutilizável.
+            O ADR Forge é um ambiente local para explorar decisões de
+            arquitetura com inteligência artificial, registrar o raciocínio e
+            transformar cada tentativa em aprendizado reutilizável.
           </p>
         </div>
         <div className="about-mark" aria-hidden="true">
@@ -38,22 +40,24 @@ export function AboutPage() {
       <section className="about-grid" aria-label="Como o projeto funciona">
         <article className="about-card about-card--feature">
           <p className="about-card__label">O objetivo</p>
-          <h2>Decisões de arquitetura que continuam úteis depois da conversa.</h2>
+          <h2>
+            Decisões de arquitetura que continuam úteis depois da conversa.
+          </h2>
           <p>
             A ferramenta ajuda a estruturar cenários, explicitar restrições e
-            produzir registros de decisão arquitetural (ADRs). Assim, o resultado
-            não é apenas uma resposta: é um ponto de partida para o time discutir,
-            validar e evoluir.
+            produzir registros de decisão arquitetural (ADRs). Assim, o
+            resultado não é apenas uma resposta: é um ponto de partida para o
+            time discutir, validar e evoluir.
           </p>
         </article>
         <article className="about-card about-card--accent">
           <p className="about-card__label">Fine-tuning</p>
           <h2>Ensinar um modelo a reconhecer o contrato do domínio.</h2>
           <p>
-            Experimentamos fine-tuning com QLoRA em modelos locais para adaptar o
-            comportamento às necessidades de decisões arquiteturais. O processo é
-            deliberadamente observável: dataset versionado, execução reproduzível,
-            avaliação e artefatos sob nosso controle.
+            Experimentamos fine-tuning com QLoRA em modelos locais para adaptar
+            o comportamento às necessidades de decisões arquiteturais. O
+            processo é deliberadamente observável: dataset versionado, execução
+            reproduzível, avaliação e artefatos sob nosso controle.
           </p>
         </article>
       </section>

@@ -59,8 +59,7 @@ def build_adr_prompt(scenario: ScenarioRevision) -> str:
         scenario.constraints,
         scenario.candidate_alternatives,
         [
-            "Pergunta: "
-            f"{answer.question}\nImpacto: {answer.impact}\nResposta: {answer.answer}"
+            f"Pergunta: {answer.question}\nImpacto: {answer.impact}\nResposta: {answer.answer}"
             for answer in scenario.clarification_answers
         ],
     )
